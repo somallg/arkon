@@ -58,3 +58,6 @@ uv.lock
 
 # Reference
 .rtk/
+
+# Ai Client
+.claude/

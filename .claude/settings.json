@@ -32,7 +32,8 @@
       "Bash(Move-Item 'd:\\\\arkon\\\\.claude\\\\skills\\\\arkon-query\\\\SKILL.md' 'd:\\\\arkon\\\\skills\\\\arkon-query\\\\SKILL.md')",
       "Bash(Move-Item 'd:\\\\arkon\\\\.claude\\\\skills\\\\arkon-edit\\\\SKILL.md' 'd:\\\\arkon\\\\skills\\\\arkon-edit\\\\SKILL.md')",
       "Bash(Move-Item 'd:\\\\arkon\\\\.claude\\\\skills\\\\arkon-review\\\\SKILL.md' 'd:\\\\arkon\\\\skills\\\\arkon-review\\\\SKILL.md')",
-      "Bash(Remove-Item -Recurse 'd:\\\\arkon\\\\.claude\\\\skills')"
+      "Bash(Remove-Item -Recurse 'd:\\\\arkon\\\\.claude\\\\skills')",
+      "Bash(rtk proxy *)"
     ]
   },
   "enabledPlugins": {
