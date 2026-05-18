@@ -17,6 +17,8 @@ from typing import Optional
 from fastmcp import FastMCP
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.mcp.logging import current_identity, logged_tool
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
@@ -49,6 +51,7 @@ async def _get_identity():
             return None, "Invalid or inactive MCP token. Contact your administrator."
         await session.commit()
 
+    current_identity.set(identity)
     return identity, None
 
 
@@ -132,6 +135,7 @@ def register_tools(mcp: FastMCP):
     # =========================================================================
 
     @mcp.tool()
+    @logged_tool("search_wiki", query_arg="query")
     async def search_wiki(query: str, top_k: int = 10) -> str:
         """
         Semantic search over the synthesized wiki pages.
@@ -195,6 +199,7 @@ def register_tools(mcp: FastMCP):
         return "\n".join(lines)
 
     @mcp.tool()
+    @logged_tool("read_wiki_index")
     async def read_wiki_index() -> str:
         """
         Read the wiki catalog (`_index` page).
@@ -219,6 +224,7 @@ def register_tools(mcp: FastMCP):
         return page.content_md
 
     @mcp.tool()
+    @logged_tool("read_wiki_page", query_arg="slug")
     async def read_wiki_page(slug: str) -> str:
         """
         Read a specific wiki page by slug, plus its backlinks.
@@ -267,6 +273,7 @@ def register_tools(mcp: FastMCP):
         return body
 
     @mcp.tool()
+    @logged_tool("list_wiki_pages")
     async def list_wiki_pages(
         page_type: Optional[str] = None,
         knowledge_type: Optional[str] = None,
@@ -321,6 +328,7 @@ def register_tools(mcp: FastMCP):
     # =========================================================================
 
     @mcp.tool()
+    @logged_tool("get_source", query_arg="source_id")
     async def get_source(source_id: str) -> str:
         """
         Metadata for a raw source document — title, knowledge type, page count,
@@ -381,6 +389,7 @@ def register_tools(mcp: FastMCP):
         return "\n".join(lines)
 
     @mcp.tool()
+    @logged_tool("get_source_outline", query_arg="source_id")
     async def get_source_outline(source_id: str) -> str:
         """
         Heading-based outline (table of contents) of a raw source.
@@ -432,6 +441,7 @@ def register_tools(mcp: FastMCP):
         return "\n".join(lines)
 
     @mcp.tool()
+    @logged_tool("get_source_pages", query_arg="source_id")
     async def get_source_pages(source_id: str, pages: str) -> str:
         """
         Read raw text of specific pages from a source.
@@ -491,6 +501,7 @@ def register_tools(mcp: FastMCP):
     # =========================================================================
 
     @mcp.tool()
+    @logged_tool("list_sources")
     async def list_sources(
         status: str = "ready",
         knowledge_type: Optional[str] = None,
@@ -556,6 +567,7 @@ def register_tools(mcp: FastMCP):
         return "\n".join(lines)
 
     @mcp.tool()
+    @logged_tool("list_knowledge_types")
     async def list_knowledge_types() -> str:
         """
         List knowledge types (admin-defined classifications) accessible to the caller.
@@ -601,6 +613,7 @@ def register_tools(mcp: FastMCP):
         return "\n".join(lines)
 
     @mcp.tool()
+    @logged_tool("get_knowledge_type_docs", query_arg="knowledge_type_slug")
     async def get_knowledge_type_docs(knowledge_type_slug: str, limit: int = 10) -> str:
         """
         List documents belonging to a specific knowledge type.
@@ -656,6 +669,7 @@ def register_tools(mcp: FastMCP):
     # =========================================================================
 
     @mcp.tool()
+    @logged_tool("propose_wiki_edit", query_arg="slug")
     async def propose_wiki_edit(slug: str, content_md: str, note: Optional[str] = None) -> str:
         """
         Propose an edit to an existing wiki page. Creates a pending draft for editor review.
@@ -722,6 +736,7 @@ def register_tools(mcp: FastMCP):
     # =========================================================================
 
     @mcp.tool()
+    @logged_tool("edit_wiki_page", query_arg="slug")
     async def edit_wiki_page(slug: str, content_md: str, change_note: Optional[str] = None) -> str:
         """
         Directly edit a wiki page. Requires editor or admin role.
@@ -777,6 +792,7 @@ def register_tools(mcp: FastMCP):
     # =========================================================================
 
     @mcp.tool()
+    @logged_tool("list_pending_drafts")
     async def list_pending_drafts(
         workspace_id: Optional[str] = None,
         limit: int = 50,
@@ -852,6 +868,7 @@ def register_tools(mcp: FastMCP):
         return f"**{len(lines)} pending draft(s):**\n\n" + "\n".join(lines)
 
     @mcp.tool()
+    @logged_tool("review_draft", query_arg="draft_id")
     async def review_draft(draft_id: str) -> str:
         """
         Get full content of a pending draft for review.
@@ -916,6 +933,7 @@ def register_tools(mcp: FastMCP):
         )
 
     @mcp.tool()
+    @logged_tool("approve_draft", query_arg="draft_id")
     async def approve_draft(
         draft_id: str,
         reviewer_note: Optional[str] = None,
@@ -984,6 +1002,7 @@ def register_tools(mcp: FastMCP):
         return f"Draft `{draft_id}` approved. Page `{page.slug}` updated to v{page.version}."
 
     @mcp.tool()
+    @logged_tool("reject_draft", query_arg="draft_id")
     async def reject_draft(draft_id: str, reviewer_note: str) -> str:
         """
         Reject a pending wiki draft. reviewer_note is required — the author needs

@@ -879,6 +879,22 @@ async def regenerate_plan_task(ctx: dict, source_id: str, user_note: str):
                 await session.commit()
 
 
+async def daily_stats_rollup_cron(ctx: dict):
+    """
+    Cronjob: recompute admin Statistics rollups for yesterday (UTC).
+
+    Idempotent — re-running overwrites previous rows via the unique constraint on
+    (date, metric_key, dimensions_hash). Failures in one section don't stop the others.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.stats_aggregator import run_daily_rollup
+
+    target = (datetime.now(timezone.utc) - timedelta(days=1)).date()
+    result = await run_daily_rollup(target)
+    logger.info(f"daily_stats_rollup_cron: {target} -> {result}")
+
+
 async def caption_images_task(ctx: dict, source_id: str):
     """
     arq task: vision-caption all SourceImage rows for a source.
@@ -1017,6 +1033,10 @@ class WorkerSettings:
     max_tries = 3
     retry_delay = 10
     health_check_interval = 30
+
+    cron_jobs = [
+        cron(daily_stats_rollup_cron, hour=2, minute=0),
+    ]
 
     @staticmethod
     async def on_startup(ctx: dict):

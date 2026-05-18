@@ -15,6 +15,7 @@ from pgvector.sqlalchemy import HALFVEC, Vector
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -994,5 +995,98 @@ class SkillContribution(Base):
     __table_args__ = (
         Index("ix_skill_contributions_contributor_id", "contributor_id"),
         Index("ix_skill_contributions_status", "status"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# MCP query log — one row per MCP tool call (for usage analytics & gap detection)
+# ---------------------------------------------------------------------------
+
+class MCPQueryLog(Base):
+    __tablename__ = "mcp_query_log"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Caller; NULL if token resolution failed before call",
+    )
+    tool_name: Mapped[str] = mapped_column(
+        String(80), nullable=False,
+        comment="MCP tool invoked: search_wiki, read_wiki_page, propose_wiki_edit, ...",
+    )
+    query_text: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True,
+        comment="Search/query string when applicable",
+    )
+    result_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    latency_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    scope_metadata: Mapped[Optional[dict]] = mapped_column(
+        JSONB, nullable=True,
+        comment="Department/project/filters used for the call",
+    )
+    result_ids: Mapped[Optional[list]] = mapped_column(
+        JSONB, nullable=True,
+        comment="IDs returned (wiki_page_id or source_id list)",
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="ok",
+        comment="ok | error | denied",
+    )
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("ix_mcp_query_log_created_at", "created_at"),
+        Index("ix_mcp_query_log_employee_id", "employee_id"),
+        Index("ix_mcp_query_log_tool_name", "tool_name"),
+        Index("ix_mcp_query_log_zero_result", "created_at", "result_count"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Stats daily rollup — pre-aggregated metrics for the admin dashboard
+# ---------------------------------------------------------------------------
+
+class StatsDailyRollup(Base):
+    """
+    One row per (date, metric_key, dimensions). value_numeric for scalar metrics;
+    value_json for top-N lists or structured payloads (top contributors, gap topics).
+    """
+    __tablename__ = "stats_daily_rollup"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        comment="UTC date the metric covers (midnight UTC)",
+    )
+    metric_key: Mapped[str] = mapped_column(
+        String(80), nullable=False,
+        comment="e.g. wiki.pages.total, mcp.queries.zero_result, draft.pending",
+    )
+    dimensions: Mapped[Optional[dict]] = mapped_column(
+        JSONB, nullable=True,
+        comment="{department_id, project_id, tool_name, source}",
+    )
+    dimensions_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="",
+        comment="md5 of canonical-serialized dimensions; empty string when dimensions is NULL",
+    )
+    value_numeric: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    value_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("date", "metric_key", "dimensions_hash", name="uq_stats_rollup_keys"),
+        Index("ix_stats_rollup_date", "date"),
+        Index("ix_stats_rollup_metric", "metric_key", "date"),
     )
 
