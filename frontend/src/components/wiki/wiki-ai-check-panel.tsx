@@ -54,9 +54,11 @@ export function WikiAiCheckPanel({ status, results }: Props) {
   const [expanded, setExpanded] = React.useState(false);
   const badge = statusBadge(status);
   const summary = results?.summary;
-  const interesting = (results?.checks || []).filter(
-    (c) => c.status === "warn" || c.status === "fail",
-  );
+  const allChecks = results?.checks || [];
+  const flagged = allChecks.filter((c) => c.status === "warn" || c.status === "fail");
+  const passed = allChecks.filter((c) => c.status === "pass");
+  const skipped = allChecks.filter((c) => c.status === "skipped");
+  const [showPassed, setShowPassed] = React.useState(false);
 
   return (
     <div className="border-t border-border bg-muted/30">
@@ -88,44 +90,101 @@ export function WikiAiCheckPanel({ status, results }: Props) {
       </button>
 
       {expanded && (
-        <div className="px-4 pb-3 space-y-2">
+        <div className="px-4 pb-3 space-y-3">
           {!results ? (
             <p className="text-xs text-muted-foreground italic">
               AI pre-review {status === "running" ? "in progress" : "has not run yet"}.
             </p>
-          ) : interesting.length === 0 ? (
-            <p className="text-xs text-emerald-700 dark:text-emerald-300">
-              All checks passed.
-            </p>
           ) : (
-            <ul className="space-y-1.5">
-              {interesting.map((c) => {
-                const ico = checkIcon(c);
-                return (
-                  <li key={c.id} className="flex gap-2 text-xs">
-                    <span className={`material-symbols-outlined shrink-0 mt-0.5 ${ico.cls}`} style={{ fontSize: 14 }}>
-                      {ico.icon}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-mono text-[11px] text-muted-foreground">
-                        [{c.layer}] {c.id}
-                      </p>
-                      {c.message && <p>{c.message}</p>}
-                      {c.matches.length > 0 && (
-                        <ul className="mt-0.5 ml-2 text-muted-foreground text-[11px] list-disc list-inside">
-                          {c.matches.slice(0, 5).map((m, i) => (
-                            <li key={i} className="truncate">{formatMatch(m)}</li>
-                          ))}
-                          {c.matches.length > 5 && (
-                            <li className="italic">+{c.matches.length - 5} more…</li>
+            <>
+              {/* Flagged checks first — these need attention */}
+              {flagged.length === 0 ? (
+                <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                  All checks passed.
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {flagged.map((c) => {
+                    const ico = checkIcon(c);
+                    return (
+                      <li key={c.id} className="flex gap-2 text-xs">
+                        <span
+                          className={`material-symbols-outlined shrink-0 mt-0.5 ${ico.cls}`}
+                          style={{ fontSize: 14 }}
+                        >
+                          {ico.icon}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-mono text-[11px] text-muted-foreground">
+                            [{c.layer}] {c.id}
+                          </p>
+                          {c.message && <p>{c.message}</p>}
+                          {c.matches.length > 0 && (
+                            <ul className="mt-0.5 ml-2 text-muted-foreground text-[11px] list-disc list-inside">
+                              {c.matches.slice(0, 5).map((m, i) => (
+                                <li key={i} className="truncate">{formatMatch(m)}</li>
+                              ))}
+                              {c.matches.length > 5 && (
+                                <li className="italic">+{c.matches.length - 5} more…</li>
+                              )}
+                            </ul>
                           )}
-                        </ul>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {/* Passed + skipped checks — collapsed by default. Reviewers
+                  can expand to see what the AI already verified. */}
+              {(passed.length > 0 || skipped.length > 0) && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassed((s) => !s)}
+                    className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: 14 }}
+                    >
+                      {showPassed ? "expand_less" : "expand_more"}
+                    </span>
+                    {showPassed ? "Hide" : "Show"} {passed.length} pass
+                    {skipped.length > 0 && ` · ${skipped.length} skipped`}
+                  </button>
+                  {showPassed && (
+                    <ul className="mt-1.5 space-y-1 pl-1">
+                      {[...passed, ...skipped].map((c) => {
+                        const ico = checkIcon(c);
+                        return (
+                          <li
+                            key={c.id}
+                            className="flex gap-2 text-[11px] text-muted-foreground"
+                          >
+                            <span
+                              className={`material-symbols-outlined shrink-0 mt-0.5 ${ico.cls}`}
+                              style={{ fontSize: 12 }}
+                            >
+                              {ico.icon}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <span className="font-mono">
+                                [{c.layer}] {c.id}
+                              </span>
+                              {c.message && (
+                                <span className="ml-1 italic">— {c.message}</span>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </>
           )}
           <p className="text-[10px] text-muted-foreground italic pt-1">
             AI checks are advisory — they do not block approval.

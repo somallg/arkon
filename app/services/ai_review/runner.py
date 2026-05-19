@@ -147,6 +147,7 @@ async def run_async_checks(draft_id: str) -> None:
                 db, content_md=draft.content_md,
                 self_page_id=draft.page_id,
                 scope_type=scope_type, scope_id=scope_id,
+                draft_kind=draft.draft_kind or "edit",
             ))
             new_checks.extend(await llm_checks.run(
                 db, content_md=draft.content_md, title=title, page_type=page_type,

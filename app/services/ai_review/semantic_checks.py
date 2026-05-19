@@ -24,8 +24,26 @@ async def run(
     self_page_id: Optional[uuid.UUID],
     scope_type: str = "global",
     scope_id: Optional[uuid.UUID] = None,
+    draft_kind: str = "edit",
 ) -> list[dict]:
     out: list[dict] = []
+
+    # The duplicate check exists to catch contributors who propose a new page
+    # whose topic is already covered. For edit drafts that signal is noisy —
+    # the draft content naturally overlaps with the page being edited's
+    # neighbour pages (parent doc + sub-entities compiled from the same
+    # source). Skip the check entirely so reviewers aren't desensitised by
+    # false-positive duplicate warnings.
+    if draft_kind != "create":
+        out.append({
+            "id": "semantic.duplicate",
+            "layer": "L3",
+            "severity": "warn",
+            "status": "skipped",
+            "message": "Duplicate detection runs on new-page proposals only",
+            "matches": [],
+        })
+        return out
 
     try:
         from app.ai.registry import ProviderRegistry
