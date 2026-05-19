@@ -13,7 +13,20 @@ import { WikiTypeBadge, wikiTypeGroupLabel } from "@/components/wiki/wiki-type-b
 import { ScopeBadge } from "@/components/shared/scope-badge";
 import { WikiSearchDialog } from "@/components/wiki/wiki-search-dialog";
 import { WikiScopeSwitcher } from "@/components/wiki/wiki-scope-switcher";
+import { WikiCreatePageDialog } from "@/components/wiki/wiki-create-page-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
+import { useAuth } from "@/lib/auth";
+
+const WORKSPACE_ROLE_LEVEL: Record<string, number> = {
+  viewer: 0,
+  contributor: 1,
+  editor: 2,
+  admin: 3,
+};
+function roleAtLeast(role: string | null, min: string): boolean {
+  if (!role) return false;
+  return (WORKSPACE_ROLE_LEVEL[role] ?? -1) >= (WORKSPACE_ROLE_LEVEL[min] ?? 999);
+}
 
 const TYPE_TABS = ["all", "entity", "concept", "topic", "source"] as const;
 
@@ -22,10 +35,13 @@ export default function WikiIndexPage() {
   const urlScopeType = searchParams.get("scope_type");
   const urlScopeId = searchParams.get("scope_id");
 
+  const { user, getWorkspaceRole, hasPermission } = useAuth();
+
   const [indexMd, setIndexMd] = React.useState<string | null>(null);
   const [allPages, setAllPages] = React.useState<WikiPageSummary[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [searchOpen, setSearchOpen] = React.useState(false);
+  const [createOpen, setCreateOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<string>("all");
   const [scopes, setScopes] = React.useState<WikiScope[]>([]);
 
@@ -86,6 +102,32 @@ export default function WikiIndexPage() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  // Compute whether the user can create / propose in the currently selected
+  // scope, and which mode the dialog should open in.
+  const isAdmin = user?.role === "admin";
+  const createMode: "direct" | "propose" | null = React.useMemo(() => {
+    if (!user) return null;
+    const st = selectedScope.scope_type;
+    const sid = selectedScope.scope_id;
+    if (st === "project" && sid) {
+      const role = getWorkspaceRole(sid);
+      if (isAdmin || roleAtLeast(role, "editor")) return "direct";
+      if (roleAtLeast(role, "contributor")) return "propose";
+      return null;
+    }
+    if (st === "department" && sid) {
+      if (isAdmin || hasPermission("wiki:write:all")) return "direct";
+      if (hasPermission("wiki:write:own_dept") && user.department_id === sid) {
+        return "propose";
+      }
+      return null;
+    }
+    // global
+    if (isAdmin || hasPermission("wiki:write:all")) return "direct";
+    if (hasPermission("wiki:write:own_dept")) return "propose";
+    return null;
+  }, [user, isAdmin, selectedScope, getWorkspaceRole, hasPermission]);
+
   // Stats
   const totalPages = allPages.length;
   const typeCounts = React.useMemo(() => {
@@ -122,6 +164,21 @@ export default function WikiIndexPage() {
                 ⌘K
               </kbd>
             </Button>
+            {createMode && (
+              <Button
+                variant="outline"
+                onClick={() => setCreateOpen(true)}
+                className="gap-2"
+                title={
+                  createMode === "direct"
+                    ? `Create a new page in ${selectedScope.name}`
+                    : `Propose a new page in ${selectedScope.name} (reviewer approves)`
+                }
+              >
+                <span className="material-symbols-outlined text-base">add</span>
+                {createMode === "direct" ? "New page" : "Propose page"}
+              </Button>
+            )}
             <Link
               href="/wiki/graph"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -267,6 +324,15 @@ export default function WikiIndexPage() {
       </div>
 
       <WikiSearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+      {createMode && (
+        <WikiCreatePageDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          mode={createMode}
+          defaultScope={selectedScope}
+          scopes={scopes}
+        />
+      )}
     </>
   );
 }

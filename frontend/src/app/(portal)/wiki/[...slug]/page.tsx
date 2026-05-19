@@ -91,22 +91,36 @@ export default function WikiPageViewer() {
   // ---------------------------------------------------------------------------
   // Permission helpers
   // ---------------------------------------------------------------------------
-  const wsRole = isScoped && scopeId ? getWorkspaceRole(scopeId) : null;
+  // Workspace role only applies to project-scoped pages — getWorkspaceRole
+  // looks up project memberships and returns null for department scope IDs.
+  const wsRole = isProjectScoped && scopeId ? getWorkspaceRole(scopeId) : null;
   const isGlobalAdmin = user?.role === "admin";
+  const isDeptScoped = scopeType === "department";
+  const isOwnDept =
+    isDeptScoped && !!scopeId && !!user?.department_id && user.department_id === scopeId;
 
-  // Can directly edit (PUT /wiki/pages/{slug})
+  // Can directly edit (PUT /wiki/pages/{slug}). Department-scoped pages
+  // require wiki:write:all — own_dept only grants propose access.
   const canEdit: boolean = (() => {
     if (!user) return false;
     if (isGlobalAdmin) return true;
-    if (isScoped) return roleAtLeast(wsRole, "editor");
+    if (isProjectScoped) return roleAtLeast(wsRole, "editor");
     return hasPermission("wiki:write:all");
   })();
 
-  // Can propose draft (POST /wiki/pages/{slug}/drafts)
+  // Can propose draft (POST /wiki/pages/{slug}/drafts).
+  // - Project: workspace contributor+
+  // - Department: own_dept perm AND the page is in user's department, OR write:all
+  // - Global: any wiki:write permission
   const canPropose: boolean = (() => {
     if (!user) return false;
-    if (canEdit) return true; // editors can also propose
-    if (isScoped) return roleAtLeast(wsRole, "contributor");
+    if (canEdit) return true; // editors can always propose
+    if (isProjectScoped) return roleAtLeast(wsRole, "contributor");
+    if (isDeptScoped) {
+      if (hasPermission("wiki:write:all")) return true;
+      return hasPermission("wiki:write:own_dept") && isOwnDept;
+    }
+    // Global
     return hasPermission("wiki:write:own_dept") || hasPermission("wiki:write:all");
   })();
 
