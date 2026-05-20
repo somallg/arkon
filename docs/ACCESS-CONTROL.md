@@ -152,16 +152,32 @@ Otherwise                        → 403 Forbidden
 
 ### Wiki pages
 
-```
-Global wiki page:
-  → User has wiki:read:own_dept or wiki:read:all → Accessible ✓
-  → Otherwise → Blocked ✗
+Wiki pages have three possible scopes — `global`, `department`, `project` — and the MCP read path resolves visibility by OR-ing the three branches the caller actually belongs to:
 
-Workspace-scoped wiki page:
-  → User has wiki:read:own_dept AND is workspace member → Accessible ✓
-  → User has wiki:read:all                             → Accessible ✓
-  → Otherwise → Blocked ✗
 ```
+Visible to a non-admin caller:
+  scope=global                                                  → always
+  scope=department AND scope_id == user.department_id           → yes
+  scope=project    AND scope_id ∈ user.project_ids (member of)  → yes
+  otherwise                                                     → no
+
+System admin                                                    → all scopes
+```
+
+> **History note.** Before commit `7676df5`, the MCP scope filter only OR-ed `global + own_dept` and silently dropped project-scoped pages — workspace members couldn't find their own workspace's wiki via `search_wiki`. The helper is now `_scope_filter_for_identity(department_id, project_ids)`; the older `_scope_filter_with_dept` is deprecated and kept only for the pipeline write path.
+
+### Out-of-scope discovery hint
+
+When a non-admin caller searches or reads a slug that exists in a scope they cannot access (a different department, a workspace they aren't a member of), the MCP tools return a *hint* instead of pretending the page does not exist:
+
+```
+search_wiki  → appends "Out-of-scope matches" section listing
+               (scope_type, scope_name, count) groups
+read_wiki_page → returns "exists in department X / workspace Y but
+                 you don't have access, contact the scope admin"
+```
+
+The hint deliberately leaks **only** the scope label + count. Page titles, summaries, and content are never surfaced across a permission boundary — a title can itself be sensitive (e.g. "Q1 layoffs"). A future opt-in (Tier 2) could expose titles via a config flag, but the default behaviour is conservative.
 
 ### Wiki write permissions (global pages)
 
@@ -218,5 +234,38 @@ Add employees as workspace members and assign their workspace role (Viewer, Cont
 When an MCP token is generated for an employee, it captures their current permission scope:
 - Which knowledge types they can access
 - Their department
+- The list of workspaces they are a member of (`project_ids`)
+- The list of source IDs reachable through those workspaces (`project_source_ids`)
 
-This scope is re-evaluated on each request based on the live state of their role and department assignments. Revoking a token or changing an employee's role takes effect immediately.
+This scope is re-evaluated on each request from the live state of their role, department, and workspace memberships. Revoking a token or changing an employee's role takes effect immediately on the next MCP call — there is no in-memory cache to invalidate.
+
+### Tokens are hashed at rest
+
+Plaintext tokens are never stored. When a token is issued, Arkon stores:
+
+| Column | What it holds |
+|---|---|
+| `employees.mcp_token_hash` | `HMAC-SHA256(MCP_TOKEN_PEPPER, plaintext)`, hex-encoded |
+| `employees.mcp_token_prefix` | First 12 chars of the plaintext (for UI display only) |
+| `employees.mcp_token_rotated_at` | When the current token was issued |
+
+Verification recomputes the HMAC of the bearer token in each request and looks it up by `mcp_token_hash`. A DB dump alone — without the pepper — cannot forge tokens. Tokens are also URL-safe random 256-bit strings, so a plain HMAC is sufficient (no bcrypt necessary).
+
+> **Migration `027` zeroed every legacy plaintext token in place.** Every user must rotate via the Admin Portal or `POST /api/my/mcp-token` after deploying 0.7.2. The `MCP_TOKEN_PEPPER` env var is required to start the server — pick a strong random value at deploy time and never rotate it (rotating invalidates every token).
+
+`generate_token` calls return the plaintext exactly once. There is no read-back path; lost tokens must be regenerated.
+
+---
+
+## Workspace-scoped picker endpoints
+
+Workspace admins need to invite members and link sources but **do not** automatically inherit org-level `org:employees:read` / `doc:read:all` permissions. Two scoped endpoints exist so the frontend pickers don't need org-wide access:
+
+| Endpoint | Returns | Required role |
+|---|---|---|
+| `GET /api/projects/{id}/members/candidates` | Employees not yet in the workspace, with name + email + department | Workspace admin |
+| `GET /api/projects/{id}/sources/candidates` | Sources not yet linked to the workspace, with title + KT + status | Workspace editor+ |
+
+Both accept `?search=` for substring filtering and cap at 500 rows. The bulk-add endpoint `POST /api/projects/{id}/members/bulk` (workspace admin) accepts `{employee_ids, role}` and processes each row in its own savepoint, so a duplicate or stale employee_id in the batch doesn't poison the rest.
+
+The frontend `ProjectDetail` page uses `Promise.allSettled` for these calls — a 403 on the candidate fetches (e.g. a workspace viewer opening the page) no longer sinks the whole load. The "Add members" UI is gated on `isOrgAdmin || workspaceRole === 'admin'` so workspace admins see the picker even when they aren't org admins.

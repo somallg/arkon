@@ -72,7 +72,15 @@ Two arq (Redis-based) worker pools:
 - `ingest_file_task` — extract text and images from uploaded files, then enqueue `ingest_map_reduce_task`
 - `ingest_url_task` — scrape and extract text from URLs, then enqueue `ingest_map_reduce_task`
 - `ingest_map_reduce_task` — MRP Phase 0-2: triage, parallel chunk extraction (MAP), entity dedup + KB reconciliation + compilation plan (REDUCE)
-- `ingest_refine_task` — MRP Phase 3-5: parallel page writers (REFINE), citation/coverage/conflict checks (VERIFY), atomic DB write (COMMIT)
+- `ingest_refine_task` — MRP Phase 3-5: parallel page writers (REFINE), citation/coverage/conflict checks (VERIFY), atomic DB write (COMMIT). Each writer opens its own `AsyncSession`.
+- `caption_images_task` — vision-model captioning for embedded images, enqueues `ingest_map_reduce_task` when done
+- `regenerate_plan_task` — re-runs Phase 2 (REDUCE + planning call) on demand
+- `reembed_all_pages_task` — backfill / re-embedding when the active embedding spec changes
+- `ai_pre_review_draft_task` — runs all four AI-review layers (L1 regex → L2 structural → L3 semantic → L4 LLM) on a wiki draft. Payload includes `expected_round` so a stale worker drops its verdict when the author has resubmitted mid-flight.
+
+**Cron jobs** (declared in `WorkerSettings.cron_jobs`):
+- `daily_stats_rollup_cron` (02:00 UTC) — recomputes admin Statistics rollups for the previous UTC day. Idempotent — re-running overwrites prior rows via the unique constraint on `(date, metric_key, dimensions_hash)`.
+- `sweep_stuck_ai_review_cron` (every 10 min) — flips any draft stuck in `ai_check_status='running'` for longer than `2 × worker_job_timeout` (min 30 min) back to `skipped`. Catches the SIGKILL / OOM / container-restart case where the in-worker try/except can't run.
 
 **Skill Worker** (`SkillWorkerSettings`):
 - `process_skill_task` — process uploaded skill packages
@@ -106,24 +114,31 @@ sources                    → uploaded documents (files or URLs)
 
 wiki_pages                 → compiled wiki articles
   ├── wiki_links           → [[wikilink]] graph edges between pages
-  ├── wiki_page_drafts     → pending edits proposed by contributors
+  ├── wiki_page_drafts     → pending edits / proposed new pages (draft_kind = edit | create)
+  │   └── wiki_draft_rounds → snapshots of each (resubmit) cycle: content_md + ai_check_results
   └── wiki_page_revisions  → full version history (immutable snapshots)
 
 knowledge_types            → categories (SOP, Product, HR Policy, ...)
 
 departments                → org units for access scoping
 employees                  → user accounts
+  │   └── mcp_token_hash / _prefix / _rotated_at  (plaintext never stored)
   └── roles                → custom RBAC role with permission list
 
 projects                   → workspaces (cross-functional contexts)
   ├── project_members      → workspace members with roles (viewer/contributor/editor/admin)
   └── project_sources      → sources linked to a workspace
 
+notifications              → in-app notifications (draft submitted/approved/rejected, etc.)
+
 skills                     → AI skill packages
   ├── skill_departments    → department scoping for skills
+  ├── skill_contributions  → contributor uploads pending admin review
   └── skill_versions       → version history with storage paths
 
-mcp_tokens                 → per-employee bearer tokens for MCP access
+stats_daily_metrics        → admin Statistics rollups (one row per day per metric per dim hash)
+mcp_query_log              → per-call MCP audit trail (tool name, employee, latency, result count)
+
 audit_log                  → immutable activity log
 ```
 
@@ -195,18 +210,35 @@ Claude Desktop → POST /mcp (Bearer ark_xxx)
 
 ```
 Contributor → POST /api/wiki/pages/{slug}/drafts
-  → WikiPageDraft(status=pending) created
-  → Editor notified (future: notification system)
+  → WikiPageDraft(status=pending, ai_check_status=queued) created
+  → notify_submitted: insert Notification rows for every reviewer-in-scope
+  → enqueue ai_pre_review_draft_task(draft_id, revision_round)
 
-Editor → GET /api/wiki/drafts (lists pending for their scope)
-Editor → POST /api/wiki/drafts/{id}/approve
-  → WikiPage.content_md updated
+Worker: ai_pre_review_draft_task
+  → L1 regex + L2 structural + L3 semantic + L4 LLM checks
+  → refresh(draft) and bail if revision_round bumped (resubmit race guard)
+  → write ai_check_results, ai_check_status ∈ {passed, warned, failed}
+
+Editor → GET /api/wiki/drafts (lists pending in their scope)
+       → /wiki/review console (3-pane) for high-volume review
+
+Editor → POST /api/wiki/drafts/{id}/approve     (advisory lock on hashtext(slug))
+  → page row refreshed inside critical section
+  → WikiPage.content_md updated, version++
   → WikiPageRevision(change_type=draft_approved) created
-  → Draft status → approved
+  → notify_approved: author + every sibling-draft author on the same page
 
-Editor → POST /api/wiki/drafts/{id}/reject
-  → reviewer_note required
-  → Draft status → rejected
+Editor → POST /api/wiki/drafts/{id}/reject       (reviewer_note required)
+       → POST /api/wiki/drafts/{id}/request-changes  (reviewer_note required)
+                → status=needs_revision
+
+Author → PATCH /api/wiki/drafts/{id}/content    (resubmit after request_changes)
+       → wiki_draft_rounds snapshot of previous content + verdict
+       → revision_round++
+       → status=pending, ai_check_status=pending, enqueue new AI worker
+
+Author → POST /api/wiki/drafts/{id}/withdraw    (pending or needs_revision)
+       → status=withdrawn (terminal)
 ```
 
 ---

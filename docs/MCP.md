@@ -272,15 +272,114 @@ reject_draft(draft_id: str, reviewer_note: str)
 
 ---
 
+### Tier 5 — needs_revision flow (workspace editor+ / author)
+
+#### `request_changes_on_draft`
+Send a pending draft back to the author for revisions without rejecting it. The draft is kept and its `revision_round` will bump on resubmit.
+
+```
+request_changes_on_draft(draft_id: str, reviewer_note: str)
+→ "Draft returned to author with note: ..."
+```
+
+#### `resubmit_draft`
+Author resubmits a draft that was sent back. Bumps `revision_round`, snapshots the previous content + AI verdict to `wiki_draft_rounds`, flips status back to `pending`, and re-enqueues AI pre-review.
+
+```
+resubmit_draft(draft_id: str, content_md: str, note?: str)
+→ "Draft resubmitted (round N). Reviewers have been notified."
+```
+
+#### `withdraw_draft`
+Author withdraws their own pending or needs-revision draft.
+
+```
+withdraw_draft(draft_id: str)
+→ "Draft withdrawn."
+```
+
+---
+
+### Tier 6 — Create new pages
+
+#### `propose_wiki_create`
+Propose a brand-new wiki page (contributor+). The page is materialised when an editor approves the draft — the reviewer can override the suggested slug / title / page_type / tags before commit.
+
+```
+propose_wiki_create(
+  slug, title, content_md,
+  page_type="concept",
+  knowledge_type_slugs=[],
+  scope_type="global", scope_id?,
+  note?,
+) → "Create draft submitted (Draft ID: ...). An editor will review."
+```
+
+#### `create_wiki_page`
+Directly create a new wiki page (editor / admin — no review).
+
+```
+create_wiki_page(
+  slug, title, content_md,
+  page_type="concept",
+  knowledge_type_slugs=[],
+  scope_type="global", scope_id?,
+) → "Page '{slug}' created at v1."
+```
+
+---
+
+## Out-of-scope discovery hint
+
+When a non-admin caller searches or reads a slug that exists in a scope they cannot access (a different department, a workspace they aren't a member of), the tools return a hint rather than silently hiding it:
+
+```
+search_wiki → response appends:
+   **Out-of-scope matches** — matching page(s) exist outside your access:
+   - 3 page(s) in department **HR** — contact the HR department admin to request access.
+   - 1 page(s) in workspace **Marketing** — contact the workspace admin to be added as a member.
+
+read_wiki_page → returns:
+   Wiki page `slug` exists in department **HR** but you don't have access.
+   Contact the scope's admin to request access.
+```
+
+The hint deliberately leaks **only** the scope label + count. Page titles, summaries, and content are never surfaced across a permission boundary. Admins bypass the hint because they already see everything.
+
+---
+
 ## Permission scope in MCP
 
 When an employee connects via MCP, their token resolves to a `ResolvedIdentity` that carries:
 
-- `allowed_knowledge_types` — which knowledge type slugs they can access (`null` = unrestricted)
-- `allowed_source_ids` — derived from knowledge types + department scope
-- `is_admin` — system admin override
+| Field | Meaning |
+|---|---|
+| `employee_id`, `employee_name` | Authenticated identity |
+| `department_id`, `department_name` | The employee's department |
+| `allowed_knowledge_types` | KT slugs the employee can access (`None` = unrestricted) |
+| `allowed_source_ids` | Source IDs reachable via department / KT scope (`None` = unrestricted) |
+| `project_ids` | UUIDs of active workspaces the employee is a member of |
+| `project_source_ids` | Source IDs linked to those workspaces |
+| `permissions` | Effective permission strings (e.g. `wiki:write:all`) |
+| `is_admin` | System-admin override — bypasses all scope filters |
 
-All tool responses are filtered against this identity. An employee can only see wiki pages, sources, and skills that match their permission scope. Workspace-scoped resources are additionally restricted to workspace members.
+The wiki layer ORs three branches when filtering pages: global + own_dept + every workspace in `project_ids`. Workspace-scoped pages are now visible to their members via `search_wiki` / `list_wiki_pages` / `read_wiki_page` — this used to be a blindspot prior to commit `7676df5`.
+
+### Tokens are hashed at rest
+
+The MCP token returned by `generate_token` is the only time the plaintext exists outside the caller. Storage:
+
+| Column | Holds |
+|---|---|
+| `employees.mcp_token_hash` | `HMAC-SHA256(MCP_TOKEN_PEPPER, plaintext)`, hex |
+| `employees.mcp_token_prefix` | First 12 chars of plaintext, for UI display |
+| `employees.mcp_token_rotated_at` | When the current token was issued |
+
+Verification recomputes the HMAC and looks up `mcp_token_hash`. A DB dump alone — without `MCP_TOKEN_PEPPER` — cannot forge tokens. Migration `027` zeroed every legacy plaintext token, so every user **must** rotate after deploying 0.7.2+.
+
+### `last_connected` debounce
+
+`verify_token` only writes `employees.last_connected` if the previous value is `>60s` old. The check is best-effort under concurrency — N simultaneous tool calls from one user can each decide to bump, but the spam is bounded by the single user's request rate, not Redis latency.
 
 ---
 

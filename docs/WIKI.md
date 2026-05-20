@@ -75,6 +75,8 @@ The plan shows every page that will be created or updated, its type, and the ent
 
 Each planned page gets its own writer. Writers run in parallel (up to 4 at once). Every writer receives pre-assembled evidence — the relevant claims with their source excerpts — so it never needs to scan the full document.
 
+> **Concurrency note.** Each REFINE writer opens its **own** `AsyncSession`. Sharing a single session across concurrent writers caused `IllegalStateChangeError` in 0.7.0 — fixed in commit `484e8d1`. If you ever add a new layer that touches the DB during REFINE, make sure it uses the per-writer session, not a shared one.
+
 **Simple writer** (≤ 8 evidence items, existing page ≤ 3K chars): a single `llm.generate()` call.
 
 **Complex writer** (larger pages): a mini agent loop (max 10 steps) with tools:
@@ -204,25 +206,104 @@ Requires: **workspace contributor+** for workspace-scoped pages, or **`wiki:writ
 
 ## Draft workflow
 
+The full state machine, including the `needs_revision` loop:
+
 ```
-Contributor submits draft
-    │
-    ▼
-Draft status: pending
-    │
-    ├── Editor reviews → Approve
-    │       │
-    │       └── content_md applied to page
-    │           WikiPageRevision(change_type=draft_approved) created
-    │           Draft status → approved
-    │
-    └── Editor reviews → Reject (reviewer_note required)
-            │
-            └── Draft status → rejected
-                Contributor can see the rejection reason
+                ┌──────────────────────────────────────────┐
+                │                                          │
+                ▼                                          │
+   Contributor submits  ──────────►  pending               │
+                                       │                   │
+                       Editor approve  │                   │
+                                       ▼                   │
+                                   approved (terminal)     │
+                                                           │
+                       Editor reject (note required)       │
+                                       ▼                   │
+                                   rejected (terminal)     │
+                                                           │
+                  Editor request_changes (note required)   │
+                                       ▼                   │
+                              needs_revision ──────────────┘
+                                       │       (author resubmits content_md
+                                       │        → bumps revision_round
+                                       │        → snapshots previous round
+                                       │           to wiki_draft_rounds)
+                                       │
+                       Author withdraw │
+                                       ▼
+                                   withdrawn (terminal)
 ```
 
-Multiple drafts can be pending for the same page at the same time. Editors resolve them one by one — approving a draft applies its content; later drafts may need to be reviewed again if their base was outdated.
+Multiple drafts can be pending for the same page at the same time. Editors resolve them one by one — approving a draft applies its content. Sibling drafts on the same page are checked for version conflict (`base_version < page.version`); the reviewer can re-base, supply edited content, or pass `allow_conflict=true` to overwrite.
+
+### Concurrency guards on approve
+
+`wiki_service.approve_draft` is wrapped in a Postgres advisory lock keyed on `hashtext(slug)`:
+
+- Two reviewers approving different drafts on the **same page** at the same time would otherwise both read `page.version=N`, both set `N+1`, and both insert a `WikiPageRevision(version=N+1)` — a duplicate row and a last-writer-wins overwrite on `content_md`. The lock serialises them, and the page row is `refresh()`'d **inside** the critical section so the second approver sees the bumped version.
+- Bulk approve wraps **each** draft in `db.begin_nested()` (a SAVEPOINT) so a conflict / IntegrityError on one row no longer poisons the outer transaction. The router also `db.expire()`s the touched draft and page on failure, because SAVEPOINT rollback reverts the database but **not** the ORM identity map — a later iteration would otherwise read the polluted `page.version` from RAM.
+
+### Cross-author notifications
+
+When a draft is approved, every other author with a still-pending draft on the same page is notified ("page advanced while your draft was pending — re-base or withdraw"). Notifications are deduped per author within the approve event and batched into one INSERT via `notification_service.notify_each`.
+
+### Draft rounds (history)
+
+Every `request_changes` → `resubmit` cycle snapshots the previous content (and AI verdict) into `wiki_draft_rounds(draft_id, round_no, content_md, author_note, reviewer_return_note, ai_check_results, submitted_at)`. Visible via `GET /api/wiki/drafts/{id}/rounds`.
+
+---
+
+## AI pre-review (L1 → L4)
+
+When a draft is submitted (or resubmitted), the arq worker runs an automated pre-review and writes the verdict to `wiki_page_drafts.ai_check_results` (jsonb). The submit path only **enqueues** the job — it never runs synchronously, so a slow LLM call cannot block draft creation.
+
+| Layer | What it checks | Cost |
+|---|---|---|
+| **L1 regex** | Email / phone / API key shaped patterns | Free |
+| **L2 structural** | Markdown well-formedness, broken wikilinks, headings sanity | Free |
+| **L3 semantic** | Duplicate / near-duplicate of other wiki pages (cosine sim on embedding). Skipped for `draft_kind="edit"` since the page is supposed to overlap with itself. | Embedding call |
+| **L4 LLM** | Tone + factuality sanity (lightweight prompt) | 1 LLM call |
+
+`ai_check_status` transitions: `pending` → `queued` (after enqueue) → `running` (worker started) → one of `passed | warned | failed | skipped`.
+
+Permissive by design: no layer ever blocks submission — even a `failed` L4 verdict only annotates the draft so the reviewer sees the flag. If Redis is down at submit time, status falls back to `skipped` so the UI never shows a stuck `queued`.
+
+### Resubmit race guard
+
+The enqueue call passes the draft's `revision_round` at that moment. Before the worker writes its final verdict, it `refresh()`'s the draft and bails if `revision_round` has bumped — the user has resubmitted, the in-memory content is stale, and a newer worker is already queued for the new content. Without this guard a slow L4 run could overwrite a fresh verdict with an out-of-date one. Code: [app/services/ai_review/runner.py](../app/services/ai_review/runner.py).
+
+### Stuck-running sweep
+
+A cron (`sweep_stuck_ai_review_cron`, runs every 10 minutes) flips any draft stuck in `ai_check_status='running'` for longer than `2 × WORKER_JOB_TIMEOUT` (min 30 min) back to `skipped`. This catches the SIGKILL / OOM / container-restart cases that the worker's own try/except can't, so the UI never shows a perpetual spinner.
+
+---
+
+## Review console — `/wiki/review`
+
+For high-volume reviewers, the inline page banner is replaced by a dedicated 3-pane console at `/wiki/review`. URL state (`?draft=&status=&mine=`) is the source of truth — deep links, browser back/forward, and "share this draft" all work.
+
+| Pane | Width | Content |
+|---|---|---|
+| Left | 320px | Queue list with scope toggle (To review / Mine), status filter, auto-snap to first item on filter change |
+| Center | flex | Sticky header (title, scope chip, link to full page), tab toggle (diff / proposed / current), compare-with dropdown across sibling drafts on the same page |
+| Right | 340px | Author + stats, submission metadata, suggested-metadata (for create drafts), suggested reviewers, AI pre-review panel, action stack (Approve / Request changes / Reject) — or Withdraw when the draft is the viewer's own |
+
+Keyboard shortcuts (disabled inside form fields):
+
+| Key | Action |
+|---|---|
+| `j` / `↓` | Next draft |
+| `k` / `↑` | Previous draft |
+| `a` | Approve |
+| `c` | Request changes (opens note + focuses textarea) |
+| `r` | Reject (opens note + focuses textarea) |
+| `Esc` | Cancel pending action |
+| `?` | Toggle shortcut help overlay |
+
+After any terminal action the draft is removed from the local list and the next one auto-selects — no page reload. AI status auto-polls every 3 s while running.
+
+The existing `WikiDraftBanner` on `/wiki/[slug]` is intentionally kept for casual reviewers who land on a page; the console is the power-user surface.
 
 ### Editor review actions
 
@@ -238,8 +319,19 @@ Multiple drafts can be pending for the same page at the same time. Editors resol
 **Via MCP (for Claude Desktop editors):**
 - `list_pending_drafts(workspace_id?)` — see pending drafts
 - `review_draft(draft_id)` — read draft vs current content
-- `approve_draft(draft_id, reviewer_note?, edited_content_md?)`
+- `approve_draft(draft_id, reviewer_note?, edited_content_md?, allow_conflict?)`
 - `reject_draft(draft_id, reviewer_note)`
+- `request_changes_on_draft(draft_id, reviewer_note)` — send back without rejecting
+- `resubmit_draft(draft_id, content_md, note?)` — author resubmits after changes
+- `withdraw_draft(draft_id)` — author withdraws their own draft
+
+**Bulk approve** for queue cleanup:
+- `POST /api/wiki/drafts/bulk-approve` `{draft_ids: [...], allow_conflict?, reviewer_note?}` — per-draft savepoint, returns `{added, skipped, errored, results[]}`.
+
+**Create-kind drafts** (propose a brand-new page rather than editing one):
+- `POST /api/wiki/drafts/create` — contributor-level, becomes a `WikiPageDraft(draft_kind="create", page_id=NULL)` with `suggested_metadata` (slug, title, page_type, scope). The reviewer can override metadata before materialising the page on approve.
+- MCP: `propose_wiki_create(slug, title, content_md, ...)`
+- Direct create (editor+, no review): `create_wiki_page(slug, title, content_md, ...)`
 
 ---
 
