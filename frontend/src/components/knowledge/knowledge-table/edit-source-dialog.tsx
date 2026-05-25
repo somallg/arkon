@@ -47,6 +47,14 @@ export function EditSourceDialog({
   const [error, setError] = React.useState("");
   const [pendingConfirm, setPendingConfirm] = React.useState(false);
 
+  // Scope and departments decide where wiki pages get committed; the worker
+  // reads them at commit time. Allowing edits mid-pipeline could land pages
+  // in the wrong scope (visibility leak). Backend enforces this too — UI just
+  // makes it obvious so users don't get a 409 on save.
+  const inFlight = ["pending", "processing", "awaiting_approval", "plan_ready"].includes(
+    source.status,
+  );
+
   // Fetch projects for workspace scope picker
   React.useEffect(() => {
     api<{ id: string; name: string }[]>("/api/projects")
@@ -71,16 +79,18 @@ export function EditSourceDialog({
     setError("");
     setPendingConfirm(false);
     try {
-      await api(`/api/sources/${source.id}`, {
-        method: "PATCH",
-        body: {
-          title: title || undefined,
-          knowledge_type_id: typeId || null,
-          department_ids: selectedDepts,
-          scope_type: scopeType,
-          scope_id: scopeType === "global" ? null : (scopeId || null),
-        },
-      });
+      // While in-flight, only send cosmetic fields. Backend rejects any
+      // scope/dept payload in those statuses, even if the value is unchanged.
+      const body: Record<string, unknown> = {
+        title: title || undefined,
+        knowledge_type_id: typeId || null,
+      };
+      if (!inFlight) {
+        body.department_ids = selectedDepts;
+        body.scope_type = scopeType;
+        body.scope_id = scopeType === "global" ? null : (scopeId || null);
+      }
+      await api(`/api/sources/${source.id}`, { method: "PATCH", body });
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -139,25 +149,35 @@ export function EditSourceDialog({
             </Select>
           </div>
 
+          {inFlight && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-1.5">
+              <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14, marginTop: 1 }}>info</span>
+              <span>
+                Tài liệu đang được xử lý. Bạn có thể đổi <strong>tên</strong> và <strong>loại tri thức</strong>, nhưng <strong>phòng ban</strong> và <strong>phạm vi</strong> chỉ đổi được sau khi xử lý xong (hoặc thất bại) — để tránh wiki page bị ghi nhầm phạm vi.
+              </span>
+            </div>
+          )}
+
           {/* Multi-department selection */}
           <div className="flex flex-col gap-1.5">
-            <Label>Departments</Label>
+            <Label className={inFlight ? "text-muted-foreground" : ""}>Departments</Label>
             <p className="text-xs text-muted-foreground">
               Select which departments can access this document. Leave empty for global access.
             </p>
-            <div className="border rounded-lg p-2 max-h-40 overflow-y-auto bg-background">
+            <div className={`border rounded-lg p-2 max-h-40 overflow-y-auto bg-background ${inFlight ? "opacity-60" : ""}`}>
               {departments.length === 0 ? (
                 <span className="text-xs text-muted-foreground">No departments available</span>
               ) : (
                 departments.map((d) => (
                   <label
                     key={d.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer"
+                    className={`flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted ${inFlight ? "cursor-not-allowed" : "cursor-pointer"}`}
                   >
                     <input
                       type="checkbox"
                       checked={selectedDepts.includes(d.id)}
                       onChange={() => toggleDept(d.id)}
+                      disabled={inFlight}
                       className="rounded border-border"
                     />
                     <span className="text-sm">{d.name}</span>
@@ -191,8 +211,8 @@ export function EditSourceDialog({
 
           {/* Visibility / Scope */}
           <div className="flex flex-col gap-1.5">
-            <Label>Visibility</Label>
-            <Select value={scopeType} onValueChange={(v) => {
+            <Label className={inFlight ? "text-muted-foreground" : ""}>Visibility</Label>
+            <Select value={scopeType} disabled={inFlight} onValueChange={(v) => {
               const val = v ?? "global";
               setScopeType(val);
               if (val === "global") setScopeId("");
@@ -230,8 +250,8 @@ export function EditSourceDialog({
 
           {scopeType === "project" && (
             <div className="flex flex-col gap-1.5">
-              <Label>Target Workspace</Label>
-              <Select value={scopeId} onValueChange={(v) => setScopeId(v ?? "")}>
+              <Label className={inFlight ? "text-muted-foreground" : ""}>Target Workspace</Label>
+              <Select value={scopeId} disabled={inFlight} onValueChange={(v) => setScopeId(v ?? "")}>
                 <SelectTrigger className="bg-background">
                   <span>{scopeId ? (projects.find(p => p.id === scopeId)?.name ?? "Select...") : "Select workspace..."}</span>
                 </SelectTrigger>

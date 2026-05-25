@@ -459,6 +459,25 @@ async def update_source(
     source = await db.get(Source, source_id)
     if not source:
         raise HTTPException(status_code=404, detail="Source not found")
+
+    # Scope and department assignments drive where wiki pages get committed.
+    # The ingestion worker reads them from DB at commit time, so an edit while
+    # the pipeline is mid-flight can cause pages to land in the wrong scope
+    # (visibility leak). Block those fields for any in-flight status; title
+    # and knowledge_type are cosmetic for the pipeline and remain editable.
+    in_flight_statuses = ("pending", "processing", "awaiting_approval", "plan_ready")
+    if source.status in in_flight_statuses:
+        changing_scope = body.scope_type is not None or body.scope_id is not None
+        changing_dept = body.department_ids is not None
+        if changing_scope or changing_dept:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Cannot change visibility or departments while the document "
+                    "is being processed. Wait until it finishes (or fails) and try again."
+                ),
+            )
+
     if body.title is not None:
         source.title = body.title
     if body.knowledge_type_id is not None:
