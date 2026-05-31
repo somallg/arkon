@@ -37,8 +37,6 @@ type Props = {
   defaultTitle?: string;
 };
 
-const PAGE_TYPES = ["entity", "concept", "topic", "source"] as const;
-
 function slugify(s: string): string {
   return s
     .toLowerCase()
@@ -62,7 +60,6 @@ export function WikiCreatePageDialog({
   const [title, setTitle] = React.useState(defaultTitle);
   const [slug, setSlug] = React.useState("");
   const [slugTouched, setSlugTouched] = React.useState(false);
-  const [pageType, setPageType] = React.useState<(typeof PAGE_TYPES)[number]>("concept");
   const [scopeKey, setScopeKey] = React.useState(
     `${defaultScope.scope_type}:${defaultScope.scope_id ?? ""}`,
   );
@@ -104,7 +101,6 @@ export function WikiCreatePageDialog({
     setTitle(defaultTitle);
     setSlug("");
     setSlugTouched(false);
-    setPageType("concept");
     setScopeKey(`${defaultScope.scope_type}:${defaultScope.scope_id ?? ""}`);
     setContent("");
     setNote("");
@@ -128,7 +124,7 @@ export function WikiCreatePageDialog({
           body: {
             slug,
             title,
-            page_type: pageType,
+            page_type: "concept",
             content_md: content,
             scope_type,
             scope_id,
@@ -147,7 +143,7 @@ export function WikiCreatePageDialog({
           body: {
             slug,
             title,
-            page_type: pageType,
+            page_type: "concept",
             content_md: content,
             scope_type,
             scope_id,
@@ -211,41 +207,23 @@ export function WikiCreatePageDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="cp-type">Page type</Label>
-              <select
-                id="cp-type"
-                value={pageType}
-                onChange={(e) => setPageType(e.target.value as (typeof PAGE_TYPES)[number])}
-                className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                {PAGE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid gap-1.5">
-              <Label htmlFor="cp-scope">Scope</Label>
-              <select
-                id="cp-scope"
-                value={scopeKey}
-                onChange={(e) => setScopeKey(e.target.value)}
-                className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                {writableScopes.map((s) => (
-                  <option
-                    key={`${s.scope_type}:${s.scope_id ?? ""}`}
-                    value={`${s.scope_type}:${s.scope_id ?? ""}`}
-                  >
-                    {s.name} {s.scope_type !== "global" ? `(${s.scope_type})` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="cp-scope">Scope</Label>
+            <select
+              id="cp-scope"
+              value={scopeKey}
+              onChange={(e) => setScopeKey(e.target.value)}
+              className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              {writableScopes.map((s) => (
+                <option
+                  key={`${s.scope_type}:${s.scope_id ?? ""}`}
+                  value={`${s.scope_type}:${s.scope_id ?? ""}`}
+                >
+                  {s.name} {s.scope_type !== "global" ? `(${s.scope_type})` : ""}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="grid gap-1.5">
