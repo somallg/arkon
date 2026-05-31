@@ -80,20 +80,20 @@ LLM_CATALOG: dict[str, LLMModelSpec] = {
         cost_per_1m_output_tokens=10.0,
         notes="High-context Gemini. Strong on long-doc reasoning.",
     ),
-    "google/gemini-3-flash": LLMModelSpec(
-        id="google/gemini-3-flash",
+    "google/gemini-3.5-flash": LLMModelSpec(
+        id="google/gemini-3.5-flash",
         provider="google",
-        model_id="gemini-3-flash",
+        model_id="gemini-3.5-flash",
         context_window_tokens=1_048_576,
         max_output_tokens=65_536,
         supports_tools=True,
         supports_vision=True,
-        label="Gemini 3 Flash (1M)",
+        label="Gemini 3.5 Flash (1M)",
         cost_per_1m_input_tokens=0.5,
-        cost_per_1m_output_tokens=3,
+        cost_per_1m_output_tokens=3.0,
         notes=(
-            "Strongest multimodal + agentic Flash so far. "
-            "Supports thinking and computer use. Pricing not yet published."
+            "Frontier-class performance, highly efficient multimodal + agentic Flash model. "
+            "Supports thinking and computer use."
         ),
     ),
     "google/gemini-3.1-flash-lite": LLMModelSpec(

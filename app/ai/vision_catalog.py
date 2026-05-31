@@ -23,17 +23,17 @@ class VisionModelSpec:
 
 VISION_CATALOG: dict[str, VisionModelSpec] = {
     # --- Google Gemini ---
-    "google/gemini-3-flash": VisionModelSpec(
-        id="google/gemini-3-flash",
+    "google/gemini-3.5-flash": VisionModelSpec(
+        id="google/gemini-3.5-flash",
         provider="google",
-        model_id="gemini-3-flash",
+        model_id="gemini-3.5-flash",
         max_image_size_mb=20,
-        label="Gemini 3 Flash",
+        label="Gemini 3.5 Flash",
         cost_per_1m_input_tokens=None,
         cost_per_image=None,
         notes=(
-            "Strongest Gemini Flash for multimodal understanding "
-            "(richer visual reasoning). Pricing not yet published."
+            "Frontier-class performance Gemini Flash for multimodal understanding "
+            "(richer visual reasoning)."
         ),
     ),
     "google/gemini-3.1-flash-lite": VisionModelSpec(
