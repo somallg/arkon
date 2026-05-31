@@ -45,6 +45,7 @@ class WikiPageSummary(BaseModel):
     slug: str
     title: str
     page_type: str
+    status: str = "seed"
     summary: str
     knowledge_type_slugs: list[str]
     source_ids: list[uuid.UUID]
@@ -138,6 +139,7 @@ def _summary(p: WikiPage, scope_name: Optional[str] = None) -> WikiPageSummary:
         slug=p.slug,
         title=p.title,
         page_type=p.page_type,
+        status=p.status or "seed",
         summary=p.summary or "",
         knowledge_type_slugs=p.knowledge_type_slugs or [],
         source_ids=list(p.source_ids or []),
