@@ -47,7 +47,7 @@ export default function WikiIndexPage() {
   const [scopes, setScopes] = React.useState<WikiScope[]>([]);
 
   // `?new=1&title=<gap topic>` deep-link from the knowledge-gaps tab in
-  // /admin/statistics — auto-open the create dialog pre-filled with the
+  // dashboard — auto-open the create dialog pre-filled with the
   // gap's normalized topic.
   React.useEffect(() => {
     if (searchParams.get("new") === "1") {

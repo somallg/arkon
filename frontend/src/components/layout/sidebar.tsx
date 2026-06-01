@@ -61,7 +61,6 @@ const navSections: NavSection[] = [
     label: "System",
     requiredPermissions: ["org:audit:read", "org:settings:read", "org:settings:manage"],
     items: [
-      { label: "Statistics", href: "/admin/statistics", icon: "analytics", requiredPermissions: ["org:settings:manage"] },
       { label: "Audit Log", href: "/audit", icon: "policy", requiredPermissions: ["org:audit:read"] },
       { label: "Settings", href: "/settings", icon: "settings", requiredPermissions: ["org:settings:read"] },
     ],
@@ -119,7 +118,8 @@ function SidebarNavItem({
   pathname: string;
   indented?: boolean;
 }) {
-  const active = isActive(item.href, pathname);
+  const { user } = useAuth();
+  const active = isActive(item.href, pathname) || (item.href === "/wiki" && pathname === "/" && user?.role !== "admin");
 
   return (
     <Link
@@ -270,10 +270,12 @@ export function Sidebar() {
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-1 sidebar-scrollbar">
         {/* Dashboard */}
-        <SidebarNavItem
-          item={{ label: "Dashboard", href: "/", icon: "dashboard" }}
-          pathname={pathname}
-        />
+        {user?.role === "admin" && (
+          <SidebarNavItem
+            item={{ label: "Dashboard", href: "/", icon: "dashboard" }}
+            pathname={pathname}
+          />
+        )}
 
 
 
