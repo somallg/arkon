@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -173,7 +174,7 @@ export function KnowledgeTable({
                         {fileIcons[getFileExt(source)] || (source.source_type === "url" ? "link" : "description")}
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate max-w-[280px]">{source.title}</p>
+                        <Link href={`/wiki/source/${source.id}`} className="text-sm font-medium text-foreground truncate max-w-[280px] hover:text-primary hover:underline transition-colors">{source.title}</Link>
                         {source.file_name && source.file_name !== source.title && (
                           <p className="text-[10px] text-muted-foreground truncate max-w-[280px]">{source.file_name}</p>
                         )}

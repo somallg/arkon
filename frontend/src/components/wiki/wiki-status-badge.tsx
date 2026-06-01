@@ -16,22 +16,22 @@ const STATUS_CONFIGS: Record<
   seed: {
     label: "Seed",
     description: "Tri thức sơ khởi vừa được nạp vào hệ thống.",
-    classes: "border-[#c2652a]/40 text-[#c2652a] bg-[#c2652a]/5 hover:bg-[#c2652a]/10",
+    classes: "border-[#a8977e]/40 text-[#8a7a62] bg-[#a8977e]/8 hover:bg-[#a8977e]/15",
   },
   developing: {
     label: "Developing",
     description: "Đang phát triển và bổ sung thêm tài liệu.",
-    classes: "border-[#d38b80]/40 text-[#b56e63] bg-[#d38b80]/5 hover:bg-[#d38b80]/10",
+    classes: "border-[#d4872e]/40 text-[#c07522] bg-[#d4872e]/8 hover:bg-[#d4872e]/15",
   },
   mature: {
     label: "Mature",
     description: "Tri thức đã được củng cố tương đối đầy đủ.",
-    classes: "border-[#bfa88f] text-[#8c6d53] bg-[#e5d4c0]/30 hover:bg-[#e5d4c0]/50",
+    classes: "border-[#2e8b8b]/40 text-[#1f7a7a] bg-[#2e8b8b]/8 hover:bg-[#2e8b8b]/15",
   },
   evergreen: {
     label: "Evergreen",
     description: "Tri thức cốt lõi, bền vững và tin cậy cao.",
-    classes: "border-[#5f7453]/40 text-[#4c5f42] bg-[#7c9070]/10 hover:bg-[#7c9070]/20",
+    classes: "border-[#3a8a3f]/40 text-[#2d7a32] bg-[#3a8a3f]/10 hover:bg-[#3a8a3f]/18",
   },
 };
 
