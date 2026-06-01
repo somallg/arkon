@@ -19,8 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import (
     Employee,
     Notification,
-    ProjectMember,
-    WorkspaceRole,
 )
 
 
@@ -206,27 +204,12 @@ async def dispatch_pending(db: Optional[AsyncSession] = None) -> None:
 # Recipient resolution helpers
 # ---------------------------------------------------------------------------
 
-async def get_workspace_reviewers(
-    db: AsyncSession, workspace_id: uuid.UUID,
+async def get_reviewers_for_scope(
+    db: AsyncSession,
+    scope_type: str,
+    scope_id: Optional[uuid.UUID],
 ) -> list[uuid.UUID]:
-    """Employees with editor+ role in the given workspace."""
-    editor_levels = [WorkspaceRole.EDITOR.value, WorkspaceRole.ADMIN.value]
-    rows = await db.execute(
-        select(ProjectMember.employee_id).where(
-            ProjectMember.project_id == workspace_id,
-            ProjectMember.role.in_(editor_levels),
-        )
-    )
-    return [r[0] for r in rows.all()]
-
-
-async def get_global_reviewers(db: AsyncSession) -> list[uuid.UUID]:
-    """Employees who can review global/department wiki drafts.
-
-    Includes:
-    - all `role == 'admin'` or `global_role == 'admin'` employees
-    - all employees whose global_role is 'knowledge_manager'
-    """
+    """Resolve the right reviewer set for a wiki page's scope (Admins & Knowledge Managers)."""
     from sqlalchemy import or_
     rows = await db.execute(
         select(Employee.id).where(
@@ -238,17 +221,3 @@ async def get_global_reviewers(db: AsyncSession) -> list[uuid.UUID]:
         )
     )
     return [r[0] for r in rows.all()]
-
-
-async def get_reviewers_for_scope(
-    db: AsyncSession,
-    scope_type: str,
-    scope_id: Optional[uuid.UUID],
-) -> list[uuid.UUID]:
-    """Resolve the right reviewer set for a wiki page's scope."""
-    if scope_type == "project" and scope_id is not None:
-        # Workspace editors + global admins (admins can review any workspace).
-        workspace = await get_workspace_reviewers(db, scope_id)
-        admins = await get_global_reviewers(db)
-        return list({*workspace, *admins})
-    return await get_global_reviewers(db)

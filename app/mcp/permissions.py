@@ -53,27 +53,25 @@ def _can_contribute(identity: ResolvedIdentity) -> bool:
     return (
         identity.is_admin
         or identity.has_any_permission("wiki:write:own_dept", "wiki:write:all")
-        or identity.has_workspace_role_at_least("contributor")
     )
 
 
 def _can_review(identity: ResolvedIdentity) -> bool:
-    """Reviewer-tier: org-wide wiki:write:all or workspace editor+."""
+    """Reviewer-tier: org-wide wiki:write:all."""
     return (
         identity.is_admin
         or identity.has_permission("wiki:write:all")
-        or identity.has_workspace_role_at_least("editor")
     )
 
 
 CAN_CONTRIBUTE_WIKI = ToolRequirement(
     predicate=_can_contribute,
-    label="wiki:write:* or workspace contributor+",
+    label="wiki:write:*",
 )
 
 CAN_REVIEW_WIKI = ToolRequirement(
     predicate=_can_review,
-    label="wiki:write:all or workspace editor+",
+    label="wiki:write:all",
 )
 
 # `create_wiki_page` / `edit_wiki_page` bypass the review queue, so they ride

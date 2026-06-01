@@ -301,7 +301,7 @@ async def get_my_scopes(
     current_user: Employee = Depends(get_current_user),
 ):
     """Get the current user's scope memberships."""
-    from app.database.models import Department, Project
+    from app.database.models import Department
 
     stmt = (
         select(ScopeMembership)
@@ -317,9 +317,7 @@ async def get_my_scopes(
         if m.scope_type == ScopeType.DEPARTMENT.value and m.scope_id:  # type: ignore[attr-defined]
             dept = await db.get(Department, m.scope_id)
             scope_name = dept.name if dept else None
-        elif m.scope_type == ScopeType.PROJECT.value and m.scope_id:
-            proj = await db.get(Project, m.scope_id)
-            scope_name = proj.name if proj else None
+
         elif m.scope_type == ScopeType.GLOBAL.value:
             scope_name = "Global"
 

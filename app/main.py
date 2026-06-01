@@ -188,7 +188,6 @@ from app.routers import (  # noqa: E402
     notes,
     notifications,
     oauth,
-    projects,
     rbac,
 
     skill_contributions,
@@ -215,7 +214,6 @@ app.include_router(admin_models.router, prefix="/api", tags=["settings"])
 app.include_router(admin_stats.router, prefix="/api", tags=["statistics"])
 app.include_router(rbac.router, prefix="/api", tags=["rbac"])
 app.include_router(knowledge_types.router, prefix="/api", tags=["knowledge-types"])
-app.include_router(projects.router, prefix="/api", tags=["projects"])
 
 app.include_router(audit.router, prefix="/api", tags=["audit"])
 app.include_router(skills.router, prefix="/api", tags=["skills"])

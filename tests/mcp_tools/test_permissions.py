@@ -25,7 +25,6 @@ def _identity(
     *,
     is_admin: bool = False,
     permissions: list[str] | None = None,
-    workspace_roles: dict[str, str] | None = None,
 ) -> ResolvedIdentity:
     return ResolvedIdentity(
         employee_id=uuid.uuid4(),
@@ -34,7 +33,6 @@ def _identity(
         department_names=["Test Dept"],
         is_admin=is_admin,
         permissions=permissions or [],
-        workspace_roles=workspace_roles or {},
     )
 
 
@@ -70,27 +68,6 @@ def test_contribute_admits_wiki_write_all():
     )
 
 
-def test_contribute_admits_workspace_contributor():
-    assert CAN_CONTRIBUTE_WIKI.allows(
-        _identity(workspace_roles={"w1": "contributor"})
-    )
-
-
-def test_contribute_admits_workspace_editor_and_admin():
-    assert CAN_CONTRIBUTE_WIKI.allows(
-        _identity(workspace_roles={"w1": "editor"})
-    )
-    assert CAN_CONTRIBUTE_WIKI.allows(
-        _identity(workspace_roles={"w1": "admin"})
-    )
-
-
-def test_contribute_rejects_workspace_viewer_only():
-    assert not CAN_CONTRIBUTE_WIKI.allows(
-        _identity(workspace_roles={"w1": "viewer"})
-    )
-
-
 def test_contribute_rejects_read_only_employee():
     assert not CAN_CONTRIBUTE_WIKI.allows(
         _identity(permissions=["wiki:read:own_dept", "doc:read:own_dept"])
@@ -118,30 +95,7 @@ def test_review_rejects_wiki_write_own_dept():
     )
 
 
-def test_review_admits_workspace_editor():
-    assert CAN_REVIEW_WIKI.allows(
-        _identity(workspace_roles={"w1": "editor"})
-    )
 
-
-def test_review_admits_workspace_admin():
-    assert CAN_REVIEW_WIKI.allows(
-        _identity(workspace_roles={"w1": "admin"})
-    )
-
-
-def test_review_rejects_workspace_contributor():
-    assert not CAN_REVIEW_WIKI.allows(
-        _identity(workspace_roles={"w1": "contributor"})
-    )
-
-
-def test_review_picks_best_of_many_workspaces():
-    """A user can be viewer in one workspace and editor in another. The
-    editor side should be enough to qualify."""
-    assert CAN_REVIEW_WIKI.allows(
-        _identity(workspace_roles={"w1": "viewer", "w2": "editor"})
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -170,29 +124,7 @@ def test_has_any_permission():
     assert not i.has_any_permission("doc:delete:all")
 
 
-def test_workspace_role_at_least_admin_short_circuits():
-    i = _identity(is_admin=True, workspace_roles={})
-    assert i.has_workspace_role_at_least("editor")
-    assert i.has_workspace_role_at_least("admin")
 
-
-def test_workspace_role_at_least_ladder():
-    i = _identity(workspace_roles={"w1": "contributor"})
-    assert i.has_workspace_role_at_least("viewer")
-    assert i.has_workspace_role_at_least("contributor")
-    assert not i.has_workspace_role_at_least("editor")
-    assert not i.has_workspace_role_at_least("admin")
-
-
-def test_workspace_role_at_least_unknown_required_role():
-    i = _identity(workspace_roles={"w1": "editor"})
-    assert not i.has_workspace_role_at_least("nonsense")
-
-
-def test_workspace_role_lookup():
-    i = _identity(workspace_roles={"w1": "editor"})
-    assert i.workspace_role("w1") == "editor"
-    assert i.workspace_role("missing") is None
 
 
 # ---------------------------------------------------------------------------

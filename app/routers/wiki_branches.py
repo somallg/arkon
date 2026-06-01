@@ -19,16 +19,13 @@ from app.database.models import (
     WikiPageDraft,
     WikiPage,
     Department,
-    Project,
 )
 from app.services import wiki_service
 from app.services.audit_service import log_audit
 from app.services.auth_service import get_current_user
 from app.services.permission_engine import (
     _get_user_permissions,
-    get_workspace_role,
     has_any_permission,
-    workspace_role_can,
 )
 from app.routers.wiki_drafts import DraftResponse, _draft_response
 
@@ -58,8 +55,8 @@ class BranchCreate(BaseModel):
     @field_validator("scope_type")
     @classmethod
     def scope_known(cls, v: str) -> str:
-        if v not in ("global", "project", "department"):
-            raise ValueError("scope_type phải là global, project, hoặc department")
+        if v not in ("global", "department"):
+            raise ValueError("scope_type phải là global hoặc department")
         return v
 
 
@@ -102,9 +99,6 @@ async def _can_create_branch(db: AsyncSession, user: Employee, scope_type: str, 
     if user.role == "admin":
         return True
     perms = _get_user_permissions(user)
-    if scope_type == "project" and scope_id:
-        role = await get_workspace_role(db, user, scope_id)
-        return bool(role) and workspace_role_can(role, "contributor")
     if scope_type == "department" and scope_id:
         if "wiki:write:all" in perms:
             return True
@@ -117,9 +111,6 @@ async def _can_create_branch(db: AsyncSession, user: Employee, scope_type: str, 
 async def _can_review_branch(db: AsyncSession, user: Employee, scope_type: str, scope_id: Optional[uuid.UUID]) -> bool:
     if user.role == "admin":
         return True
-    if scope_type == "project" and scope_id:
-        role = await get_workspace_role(db, user, scope_id)
-        return bool(role) and workspace_role_can(role, "editor")
     perms = _get_user_permissions(user)
     return "wiki:write:all" in perms
 

@@ -37,26 +37,9 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 # ---------------------------------------------------------------------------
 
 class ScopeType(str, PyEnum):
-    """Scope for sources/wiki: global, project (workspace), or department."""
+    """Scope for sources/wiki: global or department."""
     GLOBAL = "global"
-    PROJECT = "project"
     DEPARTMENT = "department"
-
-
-class WorkspaceRole(str, PyEnum):
-    """Role within a workspace (ordered by privilege level)."""
-    VIEWER = "viewer"
-    CONTRIBUTOR = "contributor"
-    EDITOR = "editor"
-    ADMIN = "admin"
-
-
-WORKSPACE_ROLE_HIERARCHY: dict[WorkspaceRole, int] = {
-    WorkspaceRole.VIEWER: 0,
-    WorkspaceRole.CONTRIBUTOR: 1,
-    WorkspaceRole.EDITOR: 2,
-    WorkspaceRole.ADMIN: 3,
-}
 
 
 class SkillContributionStatus(str, PyEnum):
@@ -779,107 +762,7 @@ class EmployeeDepartment(Base):
     )
 
 
-# ---------------------------------------------------------------------------
-# Workspaces (Projects) — membership-gated realm
-# ---------------------------------------------------------------------------
 
-class Project(Base):
-    """
-    A named workspace grouping employees and sources across departments.
-    Can represent a project, customer engagement, or any cross-functional context.
-    Access is purely membership-based — global role does NOT grant access.
-    Admin (role='admin') can view all workspaces via workspace:view:all permission.
-    """
-    __tablename__ = "projects"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text)
-    workspace_type: Mapped[str] = mapped_column(
-        String(20), default="project",
-        comment="project or customer",
-    )
-    status: Mapped[str] = mapped_column(
-        String(20), default="active",
-        comment="active or archived",
-    )
-    created_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-
-    # Relationships
-    members: Mapped[list["ProjectMember"]] = relationship(
-        back_populates="project", cascade="all, delete-orphan"
-    )
-    project_sources: Mapped[list["ProjectSource"]] = relationship(
-        back_populates="project", cascade="all, delete-orphan"
-    )
-    created_by: Mapped[Optional["Employee"]] = relationship(foreign_keys=[created_by_id])
-
-
-class ProjectMember(Base):
-    """Associates an employee with a project/workspace.
-    Role determines what the member can do within this workspace.
-    """
-    __tablename__ = "project_members"
-
-    project_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    employee_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    role: Mapped[str] = mapped_column(
-        String(20), default=WorkspaceRole.VIEWER.value,
-        comment="viewer, contributor, editor, or admin",
-    )
-    added_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-
-    # Relationships
-    project: Mapped["Project"] = relationship(back_populates="members")
-    employee: Mapped["Employee"] = relationship()
-
-    __table_args__ = (
-        Index("ix_project_members_employee_id", "employee_id"),
-    )
-
-
-class ProjectSource(Base):
-    """Associates a source document with a project."""
-    __tablename__ = "project_sources"
-
-    project_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    source_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("sources.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    added_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-
-    # Relationships
-    project: Mapped["Project"] = relationship(back_populates="project_sources")
-    source: Mapped["Source"] = relationship()
-
-    __table_args__ = (
-        Index("ix_project_sources_source_id", "source_id"),
-    )
 
 
 # ---------------------------------------------------------------------------

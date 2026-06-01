@@ -42,7 +42,7 @@ function roleAtLeast(role: string | null, min: string): boolean {
 export default function WikiPageViewer() {
   const params = useParams();
   const searchParams = useSearchParams();
-  const { user, getWorkspaceRole, hasPermission } = useAuth();
+  const { user, hasPermission } = useAuth();
 
   const slugParts = Array.isArray(params.slug) ? params.slug : [params.slug ?? ""];
   const fullSlug = slugParts.join("/");
@@ -51,7 +51,7 @@ export default function WikiPageViewer() {
   const scopeType = searchParams.get("scopeType") || undefined;
   const scopeId = searchParams.get("scopeId") || undefined;
   const isScoped = !!scopeType && scopeType !== "global";
-  const isProjectScoped = isScoped && scopeType === "project";
+  const isProjectScoped = false;
 
   // Where "back" navigates. Projects keep their dedicated workspace page;
   // department-scoped pages return to the wiki landing with the scope preserved
@@ -149,9 +149,8 @@ export default function WikiPageViewer() {
   // ---------------------------------------------------------------------------
   // Permission helpers
   // ---------------------------------------------------------------------------
-  // Workspace role only applies to project-scoped pages — getWorkspaceRole
-  // looks up project memberships and returns null for department scope IDs.
-  const wsRole = isProjectScoped && scopeId ? getWorkspaceRole(scopeId) : null;
+  // Workspace role has been deprecated and removed.
+  const wsRole = null;
   const isGlobalAdmin = user?.role === "admin";
   const isDeptScoped = scopeType === "department";
   const isOwnDept =
@@ -198,12 +197,6 @@ export default function WikiPageViewer() {
       if (!user) return null;
       const st = scope.scope_type;
       const sid = scope.scope_id;
-      if (st === "project" && sid) {
-        const role = getWorkspaceRole(sid);
-        if (isGlobalAdmin || roleAtLeast(role, "editor")) return "direct";
-        if (roleAtLeast(role, "contributor")) return "propose";
-        return null;
-      }
       if (st === "department" && sid) {
         if (isGlobalAdmin || hasPermission("wiki:write:all")) return "direct";
         if (
@@ -218,7 +211,7 @@ export default function WikiPageViewer() {
       if (hasPermission("wiki:write:own_dept")) return "propose";
       return null;
     },
-    [user, isGlobalAdmin, getWorkspaceRole, hasPermission],
+    [user, isGlobalAdmin, hasPermission],
   );
   const headerCreateMode = getCreateModeForScope({
     scope_type: currentScope.scope_type,

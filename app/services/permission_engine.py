@@ -22,13 +22,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import (
-    WORKSPACE_ROLE_HIERARCHY,
     Employee,
-    ProjectMember,
     Skill,
     Source,
     SourceDepartment,
-    WorkspaceRole,
 )
 
 # ---------------------------------------------------------------------------
@@ -213,62 +210,7 @@ def build_skill_filter(user: Employee, action: str = "read"):
     return True, None
 
 
-# ---------------------------------------------------------------------------
-# Workspace Realm: Membership check
-# ---------------------------------------------------------------------------
 
-async def can_access_workspace(
-    db: AsyncSession,
-    user: Employee,
-    workspace_id: uuid.UUID,
-) -> bool:
-    """Check if user can access a workspace.
-    Admin (role='admin') can always access all workspaces.
-    Otherwise, user must be a member.
-    """
-    if user.role == "admin":
-        return True
-
-    result = await db.execute(
-        select(ProjectMember.role)
-        .where(
-            ProjectMember.project_id == workspace_id,
-            ProjectMember.employee_id == user.id,
-        )
-    )
-    return result.scalar_one_or_none() is not None
-
-
-async def get_workspace_role(
-    db: AsyncSession,
-    user: Employee,
-    workspace_id: uuid.UUID,
-) -> Optional[str]:
-    """Get user's role in a workspace.
-    Admin gets 'admin' role in all workspaces.
-    Returns None if user is not a member.
-    """
-    if user.role == "admin":
-        return WorkspaceRole.ADMIN.value
-
-    result = await db.execute(
-        select(ProjectMember.role)
-        .where(
-            ProjectMember.project_id == workspace_id,
-            ProjectMember.employee_id == user.id,
-        )
-    )
-    return result.scalar_one_or_none()
-
-
-def workspace_role_can(member_role: str, required_role: str) -> bool:
-    """Check if a workspace role meets the minimum required level."""
-    try:
-        member_level = WORKSPACE_ROLE_HIERARCHY[WorkspaceRole(member_role)]
-        required_level = WORKSPACE_ROLE_HIERARCHY[WorkspaceRole(required_role)]
-        return member_level >= required_level
-    except (ValueError, KeyError):
-        return False
 
 
 # ---------------------------------------------------------------------------

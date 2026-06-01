@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.database.models import Employee, ProjectMember
+from app.database.models import Employee
 from app.services.auth_service import (
     authenticate_employee,
     create_access_token,
@@ -37,10 +37,7 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class WorkspaceMembershipOut(BaseModel):
-    workspace_id: str
-    workspace_name: str
-    role: str
+# Deprecated WorkspaceMembershipOut DTO
 
 
 class LoginResponse(BaseModel):
@@ -64,29 +61,16 @@ class ProfileResponse(BaseModel):
     is_active: bool
     has_mcp_token: bool
     permissions: list[str] = []
-    workspace_memberships: list[WorkspaceMembershipOut] = []
+    workspace_memberships: list[dict] = []
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-async def _get_workspace_memberships(db, employee_id) -> list[WorkspaceMembershipOut]:
-    """Get all workspace memberships for an employee."""
-    from app.database.models import Project
-    result = await db.execute(
-        select(ProjectMember, Project.name)
-        .join(Project, ProjectMember.project_id == Project.id)
-        .where(ProjectMember.employee_id == employee_id)
-    )
-    return [
-        WorkspaceMembershipOut(
-            workspace_id=str(pm.project_id),
-            workspace_name=name,
-            role=pm.role,
-        )
-        for pm, name in result.all()
-    ]
+async def _get_workspace_memberships(db, employee_id) -> list:
+    """Workspace memberships have been deprecated and removed."""
+    return []
 
 
 def _build_user_dict(employee: Employee, permissions: list[str], workspace_memberships: Optional[list] = None) -> dict:
@@ -130,7 +114,7 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
 
     return LoginResponse(
         access_token=token,
-        user=_build_user_dict(employee, permissions, [m.model_dump() for m in workspace_memberships]),
+        user=_build_user_dict(employee, permissions, []),
     )
 
 

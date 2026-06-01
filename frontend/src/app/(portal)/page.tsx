@@ -1,119 +1,47 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { PageHeader } from "@/components/shared/page-header";
-import { Button } from "@/components/ui/button";
-import { ProjectList } from "@/components/projects/project-list";
-import { ProjectDialog } from "@/components/projects/project-dialog";
-import { ProjectDetail } from "@/components/projects/project-detail";
-
-export type Project = {
-  id: string;
-  name: string;
-  description?: string;
-  workspace_type: string;
-  status: string;
-  member_count: number;
-  source_count: number;
-  created_at: string;
-};
 
 export default function DashboardPage() {
-  const { user, hasPermission } = useAuth();
-  const canManage = hasPermission("workspaces.create");
-
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editProject, setEditProject] = useState<Project | null>(null);
-  const [detailProject, setDetailProject] = useState<Project | null>(null);
-
-  const searchParams = useSearchParams();
+  const { user } = useAuth();
   const router = useRouter();
 
-  const loadProjects = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await api<Project[]>("/api/projects");
-      setProjects(data);
-    } catch {
-      setProjects([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
+    if (!user) return;
 
-  // Auto-open create dialog from sidebar shortcut (?new=1)
-  useEffect(() => {
-    if (searchParams.get("new") === "1" && canManage) {
-      setEditProject(null);
-      setDialogOpen(true);
-      router.replace("/", { scroll: false });
+    if (user.role === "admin") {
+      router.replace("/admin/statistics");
+    } else {
+      router.replace("/wiki");
     }
-  }, [searchParams, canManage, router]);
-
-  const handleCreate = () => {
-    setEditProject(null);
-    setDialogOpen(true);
-  };
-
-  const handleEdit = (project: Project) => {
-    setEditProject(project);
-    setDialogOpen(true);
-  };
-
-  if (detailProject) {
-    return (
-      <ProjectDetail
-        project={detailProject}
-        isAdmin={canManage}
-        onBack={() => { setDetailProject(null); loadProjects(); }}
-      />
-    );
-  }
+  }, [user, router]);
 
   return (
-    <>
-      <PageHeader
-        title="Dashboard"
-        description="Manage projects and customer engagements — each with its own team and documents."
-        action={
-          canManage ? (
-            <Button
-              onClick={handleCreate}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              <span className="material-symbols-outlined text-base mr-1">add</span>
-              New Workspace
-            </Button>
-          ) : undefined
-        }
-      />
+    <div className="flex min-h-[60vh] flex-col items-center justify-center p-6 text-center">
+      {/* Sleek, Glassmorphic Loading Container */}
+      <div className="relative flex flex-col items-center gap-6 rounded-2xl border border-white/[0.08] bg-black/20 p-12 backdrop-blur-xl shadow-2xl transition-all duration-300">
+        
+        {/* Harmonious HSL Gradient Decorative Glow */}
+        <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-primary/30 to-violet-500/30 opacity-30 blur-lg transition-all"></div>
+        
+        {/* Dynamic Micro-animated Spinner */}
+        <div className="relative h-12 w-12">
+          <div className="absolute inset-0 rounded-full border-2 border-muted/30"></div>
+          <div className="absolute inset-0 rounded-full border-2 border-t-primary border-r-primary animate-spin" style={{ animationDuration: '0.8s' }}></div>
+        </div>
 
-      <ProjectList
-        projects={projects}
-        loading={loading}
-        isAdmin={canManage}
-        onEdit={handleEdit}
-        onOpen={setDetailProject}
-        onRefresh={loadProjects}
-      />
-
-      {canManage && (
-        <ProjectDialog
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-          project={editProject}
-          onSaved={loadProjects}
-        />
-      )}
-    </>
+        {/* Dynamic typography and micro-content */}
+        <div className="space-y-2 z-10">
+          <h2 className="text-lg font-semibold tracking-wide text-foreground animate-pulse">
+            Chuyển hướng không gian làm việc
+          </h2>
+          <p className="text-xs text-muted-foreground max-w-[280px]">
+            Đang tải dữ liệu và xác định không gian làm việc phù hợp cho tài khoản của bạn...
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

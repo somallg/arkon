@@ -32,12 +32,7 @@ type NavSection = {
   items: NavItem[];
 };
 
-type WorkspaceItem = {
-  id: string;
-  name: string;
-  workspace_type: string;
-  status: string;
-};
+
 
 /* ─── Navigation Config ─── */
 
@@ -111,15 +106,7 @@ function isActive(href: string, pathname: string) {
   );
 }
 
-/** Pick a color for workspace icon based on workspace type */
-function workspaceColor(type: string): string {
-  const colors: Record<string, string> = {
-    internal: "#c2652a",
-    customer: "#2a7ec2",
-    partner: "#2ac265",
-  };
-  return colors[type] || "#78706a";
-}
+
 
 /* ─── Sub-components ─── */
 
@@ -192,137 +179,7 @@ function SidebarStaticSection({
   );
 }
 
-/** Workspaces section — collapsible, fetches workspace list */
-function SidebarWorkspacesSection({
-  pathname,
-  canCreate,
-}: {
-  pathname: string;
-  canCreate: boolean;
-}) {
-  const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [open, toggle] = useGroupToggle("workspaces", true);
 
-  useEffect(() => {
-    const fetchWS = () => {
-      api<WorkspaceItem[]>("/api/projects")
-        .then((data) => setWorkspaces(data))
-        .catch(() => setWorkspaces([]))
-        .finally(() => setLoaded(true));
-    };
-
-    fetchWS();
-
-    window.addEventListener("workspaces-changed", fetchWS);
-    return () => window.removeEventListener("workspaces-changed", fetchWS);
-  }, [pathname]);
-
-  const SIDEBAR_LIMIT = 10;
-  const hasActiveChild = workspaces.some((w) =>
-    pathname.startsWith(`/workspaces`) && pathname.includes(w.id)
-  );
-  const isOpen = open || hasActiveChild;
-  const displayedWorkspaces = workspaces.slice(0, SIDEBAR_LIMIT);
-  const hasMore = workspaces.length > SIDEBAR_LIMIT;
-  const itemCount = displayedWorkspaces.length + (hasMore ? 1 : 0);
-
-  return (
-    <div className="mt-4">
-      {/* Section header — collapsible + create button */}
-      <div className="group/ws flex items-center">
-        <button
-          onClick={toggle}
-          className="flex flex-1 items-center gap-1 px-2 py-[3px] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 group-hover/ws:text-muted-foreground transition-colors duration-100"
-        >
-          <span>Workspaces</span>
-          <span
-            className="material-symbols-outlined text-[14px] transition-all duration-150 opacity-0 group-hover/ws:opacity-100"
-            style={{
-              transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)",
-              fontVariationSettings: "'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 14",
-            }}
-          >
-            expand_more
-          </span>
-        </button>
-        {canCreate && (
-          <Link
-            href="/?new=1"
-            className="shrink-0 w-5 h-5 flex items-center justify-center rounded text-muted-foreground/40 hover:bg-black/[0.04] hover:text-muted-foreground transition-all duration-100 opacity-0 group-hover/ws:opacity-100 mr-1"
-            title="New Workspace"
-          >
-            <span
-              className="material-symbols-outlined text-[16px]"
-              style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 16" }}
-            >
-              add
-            </span>
-          </Link>
-        )}
-      </div>
-
-      {/* Workspace items */}
-      <div
-        className="overflow-hidden transition-all duration-200 ease-out"
-        style={{
-          maxHeight: isOpen ? `${Math.max(itemCount, 1) * 32 + 8}px` : "0px",
-          opacity: isOpen ? 1 : 0,
-        }}
-      >
-        <div className="mt-[2px] space-y-[1px]">
-          {!loaded ? (
-            <div className="flex items-center gap-2 ml-3 px-2 py-[5px]">
-              <span className="material-symbols-outlined text-[14px] text-muted-foreground/40 animate-spin">
-                progress_activity
-              </span>
-              <span className="text-[12px] text-muted-foreground/40">Loading…</span>
-            </div>
-          ) : workspaces.length === 0 ? (
-            <div className="ml-3 px-2 py-[5px] text-[12px] text-muted-foreground/40">
-              No workspaces
-            </div>
-          ) : (
-            <>
-              {displayedWorkspaces.map((ws) => {
-                const href = `/workspaces/${ws.id}`;
-                const active = pathname === href;
-
-                return (
-                  <Link
-                    key={ws.id}
-                    href={href}
-                    className={cn(
-                      "group relative flex items-center gap-2 rounded-md ml-3 px-2 py-[5px] text-[13px] transition-colors duration-100",
-                      active
-                        ? "bg-black/[0.04] font-semibold text-foreground"
-                        : "text-muted-foreground hover:bg-black/[0.03] hover:text-foreground"
-                    )}
-                  >
-                    <span
-                      className="w-[8px] h-[8px] rounded-[2px] shrink-0"
-                      style={{ backgroundColor: workspaceColor(ws.workspace_type) }}
-                    />
-                    <span className="truncate">{ws.name}</span>
-                  </Link>
-                );
-              })}
-              {hasMore && (
-                <Link
-                  href="/"
-                  className="flex items-center gap-2 ml-3 px-2 py-[5px] text-[12px] text-muted-foreground/50 hover:text-muted-foreground transition-colors duration-100"
-                >
-                  <span className="material-symbols-outlined text-[14px]">more_horiz</span>
-                  <span>{workspaces.length - SIDEBAR_LIMIT} more…</span>
-                </Link>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function OrgHeader({
   user,
@@ -418,8 +275,7 @@ export function Sidebar() {
           pathname={pathname}
         />
 
-        {/* Workspaces — collapsible, inline list */}
-        <SidebarWorkspacesSection pathname={pathname} canCreate={hasPermission("workspace:view:all")} />
+
 
         {/* Static sections — no collapse */}
         {visibleSections.map((section) => (

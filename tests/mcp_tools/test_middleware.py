@@ -67,7 +67,6 @@ def _identity(
     *,
     is_admin: bool = False,
     permissions: Optional[list[str]] = None,
-    workspace_roles: Optional[dict[str, str]] = None,
 ) -> ResolvedIdentity:
     return ResolvedIdentity(
         employee_id=uuid.uuid4(),
@@ -76,7 +75,6 @@ def _identity(
         department_names=["Test Dept"],
         is_admin=is_admin,
         permissions=permissions or [],
-        workspace_roles=workspace_roles or {},
     )
 
 
@@ -134,41 +132,7 @@ async def test_wiki_write_all_sees_everything_short_of_admin_only(monkeypatch):
     assert await _visible(mcp) == ALL_TOOLS
 
 
-@pytest.mark.asyncio
-async def test_workspace_contributor_sees_contributor_plus_public(monkeypatch):
-    mcp = create_mcp_server()
-    _stub_identity(monkeypatch, _identity(
-        workspace_roles={"w1": "contributor"},
-    ))
-    assert await _visible(mcp) == PUBLIC_TOOLS | CONTRIBUTOR_TOOLS
 
-
-@pytest.mark.asyncio
-async def test_workspace_editor_sees_everything(monkeypatch):
-    mcp = create_mcp_server()
-    _stub_identity(monkeypatch, _identity(
-        workspace_roles={"w1": "editor"},
-    ))
-    assert await _visible(mcp) == ALL_TOOLS
-
-
-@pytest.mark.asyncio
-async def test_workspace_viewer_only_sees_public(monkeypatch):
-    mcp = create_mcp_server()
-    _stub_identity(monkeypatch, _identity(
-        workspace_roles={"w1": "viewer"},
-    ))
-    assert await _visible(mcp) == PUBLIC_TOOLS
-
-
-@pytest.mark.asyncio
-async def test_best_role_across_workspaces_wins(monkeypatch):
-    """Viewer in one workspace, editor in another → reviewer tier unlocked."""
-    mcp = create_mcp_server()
-    _stub_identity(monkeypatch, _identity(
-        workspace_roles={"w1": "viewer", "w2": "editor"},
-    ))
-    assert await _visible(mcp) == ALL_TOOLS
 
 
 # ---------------------------------------------------------------------------
