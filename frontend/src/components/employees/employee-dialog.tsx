@@ -20,14 +20,14 @@ import {
 } from "@/components/ui/dialog";
 
 type Department = { id: string; name: string };
-type Role = { id: string; name: string; is_system?: boolean };
+type Role = { id: string; name: string };
 type Employee = {
   id: string;
   name: string;
   email: string;
   role: string;
+  global_role: string;
   department_ids: string[];
-  custom_role_id?: string;
 };
 
 type Props = {
@@ -51,12 +51,10 @@ export function EmployeeDialog({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("employee");
+  const [globalRole, setGlobalRole] = useState("viewer");
   const [deptIds, setDeptIds] = useState<string[]>([]);
-  const [customRoleId, setCustomRoleId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [localRoles, setLocalRoles] = useState<Role[]>([]);
   const [localDepartments, setLocalDepartments] = useState<Department[]>([]);
   const [inlinePrompt, setInlinePrompt] = useState({
     open: false,
@@ -67,10 +65,6 @@ export function EmployeeDialog({
     error: "",
     onSubmit: async (val: string) => {},
   });
-
-  useEffect(() => {
-    setLocalRoles(roles.filter(r => !r.is_system));
-  }, [roles]);
 
   useEffect(() => {
     setLocalDepartments(departments);
@@ -96,26 +90,6 @@ export function EmployeeDialog({
     });
   };
 
-  const handleCreateRole = () => {
-    setInlinePrompt({
-      open: true,
-      title: "Create Position",
-      label: "Position Name",
-      value: "",
-      saving: false,
-      error: "",
-      onSubmit: async (val) => {
-        const newRole = await api<Role>("/api/roles", {
-          method: "POST",
-          body: { name: val, permissions: [] }
-        });
-        setLocalRoles(prev => [...prev, newRole]);
-        setCustomRoleId(newRole.id);
-        setInlinePrompt(p => ({ ...p, open: false }));
-      }
-    });
-  };
-
   const submitInlinePrompt = async () => {
     if (!inlinePrompt.value.trim()) return;
     setInlinePrompt(p => ({ ...p, saving: true, error: "" }));
@@ -130,17 +104,15 @@ export function EmployeeDialog({
     if (employee) {
       setName(employee.name);
       setEmail(employee.email);
-      setRole(employee.role);
+      setGlobalRole(employee.global_role || "viewer");
       setDeptIds(employee.department_ids ?? []);
-      setCustomRoleId(employee.custom_role_id || "");
       setPassword("");
     } else {
       setName("");
       setEmail("");
       setPassword("");
-      setRole("employee");
+      setGlobalRole("viewer");
       setDeptIds(departments[0]?.id ? [departments[0].id] : []);
-      setCustomRoleId("");
     }
     setError("");
   }, [employee, open, departments]);
@@ -154,9 +126,9 @@ export function EmployeeDialog({
       const body: Record<string, unknown> = {
         name,
         email,
-        role,
+        role: globalRole === "admin" ? "admin" : "employee",
+        global_role: globalRole,
         department_ids: deptIds,
-        custom_role_id: customRoleId || null,
       };
       if (password) body.password = password;
 
@@ -230,14 +202,17 @@ export function EmployeeDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
-              <Label>System Role</Label>
-              <Select value={role} onValueChange={(v) => v && setRole(v)}>
+              <Label>Role</Label>
+              <Select value={globalRole} onValueChange={(v) => v && setGlobalRole(v)}>
                 <SelectTrigger className="bg-background">
-                  {role === "admin" ? "Admin" : role === "employee" ? "Employee" : <SelectValue />}
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="employee">Employee</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  {roles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -304,41 +279,6 @@ export function EmployeeDialog({
               </div>
             </div>
           </div>
-
-          {role === "employee" && (
-            <div className="flex flex-col gap-2">
-              <Label>Position</Label>
-              <Select
-                value={customRoleId || "__none__"}
-                onValueChange={(v) => {
-                  if (v === "__new__") {
-                    handleCreateRole();
-                    return;
-                  }
-                  setCustomRoleId(v === "__none__" ? "" : (v ?? ""));
-                }}
-              >
-                <SelectTrigger className="bg-background">
-                  {customRoleId ? (localRoles.find(r => r.id === customRoleId)?.name || customRoleId) : "None"}
-                </SelectTrigger>
-                <SelectContent className="!w-max min-w-(--anchor-width)">
-                  <SelectItem value="__none__">None</SelectItem>
-                  {localRoles.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>
-                      {r.name}
-                    </SelectItem>
-                  ))}
-                  <div className="h-px bg-border my-1 -mx-1" />
-                  <SelectItem value="__new__" className="text-primary font-medium focus:text-primary">
-                    <span className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-sm">add</span>
-                      Create new position...
-                    </span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
 
           {error && (
             <p className="text-destructive text-sm bg-destructive/10 px-3 py-2 rounded-lg">

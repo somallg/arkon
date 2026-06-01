@@ -20,7 +20,6 @@ from app.database.models import (
     Employee,
     Notification,
     ProjectMember,
-    Role,
     WorkspaceRole,
 )
 
@@ -225,20 +224,20 @@ async def get_global_reviewers(db: AsyncSession) -> list[uuid.UUID]:
     """Employees who can review global/department wiki drafts.
 
     Includes:
-    - all `role == 'admin'` employees
-    - all employees whose custom_role grants `wiki:write:all`
+    - all `role == 'admin'` or `global_role == 'admin'` employees
+    - all employees whose global_role is 'knowledge_manager'
     """
-    admin_rows = await db.execute(
-        select(Employee.id).where(Employee.role == "admin")
+    from sqlalchemy import or_
+    rows = await db.execute(
+        select(Employee.id).where(
+            or_(
+                Employee.role == "admin",
+                Employee.global_role == "admin",
+                Employee.global_role == "knowledge_manager",
+            )
+        )
     )
-    admins = [r[0] for r in admin_rows.all()]
-
-    perm_rows = await db.execute(
-        select(Employee.id)
-        .join(Role, Role.id == Employee.custom_role_id)
-        .where(Role.permissions.op("@>")(["wiki:write:all"]))
-    )
-    return list({*admins, *(r[0] for r in perm_rows.all())})
+    return [r[0] for r in rows.all()]
 
 
 async def get_reviewers_for_scope(

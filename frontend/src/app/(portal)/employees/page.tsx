@@ -12,23 +12,17 @@ export type Department = {
   name: string;
 };
 
-export type Role = {
-  id: string;
-  name: string;
-};
-
 export type Employee = {
   id: string;
   name: string;
   email: string;
   role: string;
+  global_role: string;
   department_ids: string[];
   department_names: string[];
   is_active: boolean;
   has_token: boolean;
   last_connected?: string;
-  custom_role_id?: string;
-  custom_role_name?: string;
 };
 
 type PaginatedResponse = {
@@ -42,7 +36,12 @@ type PaginatedResponse = {
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
+  const roles = [
+    { id: "viewer", name: "Viewer" },
+    { id: "contributor", name: "Contributor" },
+    { id: "knowledge_manager", name: "Knowledge Manager" },
+    { id: "admin", name: "System Admin" }
+  ];
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
@@ -73,7 +72,6 @@ export default function EmployeesPage() {
   useEffect(() => {
     loadEmployees();
     api<Department[]>("/api/departments").then(setDepartments).catch(() => {});
-    api<Role[]>("/api/roles").then(setRoles).catch(() => {});
   }, [loadEmployees]);
 
   const handleCreate = () => {

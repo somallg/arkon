@@ -276,28 +276,16 @@ def workspace_role_can(member_role: str, required_role: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def _get_user_permissions(user: Employee) -> set[str]:
-    """Extract effective permissions from user's custom role."""
-    if user.role == "admin":
-        from app.services.permissions import ALL_PERMISSIONS
+    """Extract effective permissions from user's fixed system role."""
+    from app.services.permissions import ALL_PERMISSIONS, ROLE_PERMISSIONS_MAP
+    
+    if user.role == "admin" or getattr(user, "global_role", None) == "admin":
         return set(ALL_PERMISSIONS)
 
-    if not user.custom_role:
-        # Fallback — should rarely hit since auth_service auto-attaches Employee role
-        from app.services.permissions import EMPLOYEE_DEFAULT_PERMISSIONS
-        return set(EMPLOYEE_DEFAULT_PERMISSIONS)
+    g_role = getattr(user, "global_role", "viewer") or "viewer"
+    stored = ROLE_PERMISSIONS_MAP.get(g_role, ROLE_PERMISSIONS_MAP["viewer"])
 
-    stored = user.custom_role.permissions or []
-
-    # Auto-migrate legacy permission names
-    from app.services.permissions import LEGACY_PERMISSION_MAP
-    effective: set[str] = set()
-    for p in stored:
-        if p in LEGACY_PERMISSION_MAP:
-            effective.update(LEGACY_PERMISSION_MAP[p])
-        else:
-            effective.add(p)
-
-    return effective
+    return set(stored)
 
 
 def get_effective_permissions(user: Employee) -> list[str]:

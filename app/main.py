@@ -190,7 +190,7 @@ from app.routers import (  # noqa: E402
     oauth,
     projects,
     rbac,
-    roles,
+
     skill_contributions,
     skills,
     sources,
@@ -216,7 +216,7 @@ app.include_router(admin_stats.router, prefix="/api", tags=["statistics"])
 app.include_router(rbac.router, prefix="/api", tags=["rbac"])
 app.include_router(knowledge_types.router, prefix="/api", tags=["knowledge-types"])
 app.include_router(projects.router, prefix="/api", tags=["projects"])
-app.include_router(roles.router, prefix="/api", tags=["roles"])
+
 app.include_router(audit.router, prefix="/api", tags=["audit"])
 app.include_router(skills.router, prefix="/api", tags=["skills"])
 app.include_router(skill_contributions.router, prefix="/api", tags=["skill-contributions"])

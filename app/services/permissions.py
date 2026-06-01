@@ -61,6 +61,36 @@ EMPLOYEE_DEFAULT_PERMISSIONS: list[str] = [
 ]
 
 # ---------------------------------------------------------------------------
+# Static permissions mapping for Fixed System Roles
+# ---------------------------------------------------------------------------
+
+ROLE_PERMISSIONS_MAP: dict[str, list[str]] = {
+    "viewer": [
+        "doc:read:own_dept",
+        "wiki:read:own_dept",
+        "skill:read:own_dept",
+        "org:departments:read",
+        "org:employees:read",
+    ],
+    "contributor": [
+        "doc:read:own_dept", "doc:create:own_dept",
+        "wiki:read:own_dept", "wiki:write:own_dept",
+        "skill:read:own_dept", "skill:create:own_dept",
+        "org:departments:read", "org:employees:read",
+    ],
+    "knowledge_manager": [
+        "doc:read:all", "doc:create:all", "doc:edit:all", "doc:delete:all",
+        "wiki:read:all", "wiki:write:all", "wiki:delete:all",
+        "skill:read:all", "skill:create:all", "skill:edit:all", "skill:delete:all",
+        "skill:contribution:review",
+        "org:departments:read", "org:departments:manage",
+        "org:employees:read", "org:employees:manage",
+        "org:audit:read",
+    ],
+    "admin": ALL_PERMISSIONS,
+}
+
+# ---------------------------------------------------------------------------
 # Permission groups (for UI rendering)
 # ---------------------------------------------------------------------------
 

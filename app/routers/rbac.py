@@ -49,10 +49,10 @@ class EmployeeCreate(BaseModel):
     email: str
     password: Optional[str] = None  # Optional on update
     role: str = "employee"  # "admin" or "employee"
+    global_role: str = "viewer"  # "viewer", "contributor", "knowledge_manager", "admin"
     # All departments the employee belongs to. Empty list is allowed — such a
     # user can only see resources scoped to 'global'.
     department_ids: list[str] = []
-    custom_role_id: Optional[str] = None
 
 
 class EmployeeOut(BaseModel):
@@ -60,13 +60,12 @@ class EmployeeOut(BaseModel):
     name: str
     email: str
     role: str
+    global_role: str
     department_ids: list[str] = []
     department_names: list[str] = []
     is_active: bool
     has_token: bool
     last_connected: Optional[str] = None
-    custom_role_id: Optional[str] = None
-    custom_role_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -168,7 +167,6 @@ async def list_employees(
         selectinload(Employee.employee_departments).selectinload(
             EmployeeDepartment.department
         ),
-        selectinload(Employee.custom_role),
     )
     count_base = select(sa_func.count(Employee.id))
 
@@ -202,6 +200,7 @@ async def list_employees(
                 name=e.name,
                 email=e.email,
                 role=e.role,
+                global_role=e.global_role,
                 department_ids=[str(ed.department_id) for ed in e.employee_departments],
                 department_names=[
                     ed.department.name for ed in e.employee_departments if ed.department
@@ -209,8 +208,6 @@ async def list_employees(
                 is_active=e.is_active,
                 has_token=bool(e.mcp_token_hash),
                 last_connected=e.last_connected.isoformat() if e.last_connected else None,
-                custom_role_id=str(e.custom_role_id) if e.custom_role_id else None,
-                custom_role_name=e.custom_role.name if e.custom_role else None,
             )
             for e in employees
         ],
@@ -234,6 +231,8 @@ async def create_employee(
         raise HTTPException(400, "Password must be at least 8 characters")
     if body.role not in ("admin", "employee"):
         raise HTTPException(400, "Role must be 'admin' or 'employee'")
+    if body.global_role not in ("viewer", "contributor", "knowledge_manager", "admin"):
+        raise HTTPException(400, "Global role must be one of: viewer, contributor, knowledge_manager, admin")
 
     dept_uuids = [uuid.UUID(d) for d in body.department_ids]
     if dept_uuids:
@@ -248,7 +247,7 @@ async def create_employee(
         email=body.email,
         password_hash=hash_password(body.password),
         role=body.role,
-        custom_role_id=uuid.UUID(body.custom_role_id) if body.custom_role_id else None,
+        global_role=body.global_role,
     )
     db.add(emp)
     await db.flush()  # need emp.id before adding join rows
@@ -272,10 +271,12 @@ async def update_employee(
     emp = await db.get(Employee, uuid.UUID(emp_id))
     if not emp:
         raise HTTPException(404, "Employee not found")
+    if body.global_role not in ("viewer", "contributor", "knowledge_manager", "admin"):
+        raise HTTPException(400, "Global role must be one of: viewer, contributor, knowledge_manager, admin")
     emp.name = body.name
     emp.email = body.email
     emp.role = body.role
-    emp.custom_role_id = uuid.UUID(body.custom_role_id) if body.custom_role_id else None
+    emp.global_role = body.global_role
     if body.password:
         emp.password_hash = hash_password(body.password)
 

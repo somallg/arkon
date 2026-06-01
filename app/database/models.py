@@ -630,29 +630,6 @@ class KnowledgeType(Base):
 # RBAC: Roles, Departments, Employees
 # ---------------------------------------------------------------------------
 
-class Role(Base):
-    """Custom permission role assignable to employees.
-    Permissions use scoped format: resource:action:scope
-    e.g. 'doc:read:own_dept', 'doc:read:all', 'org:settings:manage'
-    """
-    __tablename__ = "roles"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
-    description: Mapped[Optional[str]] = mapped_column(Text)
-    permissions: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
-    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-
-    # Relationships
-    employees: Mapped[list["Employee"]] = relationship(back_populates="custom_role")
 
 
 class Department(Base):
@@ -711,9 +688,9 @@ class Employee(Base):
         String(20), default="employee",
         comment="admin or employee — system-level role",
     )
-    custom_role_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("roles.id", ondelete="SET NULL"),
-        nullable=True,
+    global_role: Mapped[str] = mapped_column(
+        String(30), default="viewer",
+        comment="viewer, contributor, knowledge_manager, or admin",
     )
     # Legacy plaintext column — kept nullable for one release so a rollback is
     # possible. The hashed column below is authoritative; new code never reads
@@ -753,7 +730,7 @@ class Employee(Base):
         back_populates="employees",
         viewonly=True,
     )
-    custom_role: Mapped[Optional["Role"]] = relationship(back_populates="employees")
+
 
     __table_args__ = (
         Index("ix_employees_mcp_token", "mcp_token"),

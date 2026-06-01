@@ -89,7 +89,6 @@ async def authenticate_employee(
             selectinload(Employee.employee_departments).selectinload(
                 EmployeeDepartment.department
             ),
-            selectinload(Employee.custom_role),
         )
     )
     result = await db.execute(stmt)
@@ -133,7 +132,6 @@ async def get_current_user(
             selectinload(Employee.employee_departments).selectinload(
                 EmployeeDepartment.department
             ),
-            selectinload(Employee.custom_role),
         )
         .where(Employee.id == uuid.UUID(payload["sub"]))
     )
@@ -144,14 +142,9 @@ async def get_current_user(
             detail="Account not found or deactivated",
         )
 
-    # Auto-attach the "Employee" system role if no custom role assigned
-    if employee.role == "employee" and not employee.custom_role:
-        from app.database.models import Role
-        sys_role = (await db.execute(
-            select(Role).where(Role.name == "Employee", Role.is_system.is_(True))
-        )).scalar_one_or_none()
-        if sys_role:
-            employee.custom_role = sys_role
+    # Ensure default global_role is populated
+    if not getattr(employee, "global_role", None):
+        employee.global_role = "viewer"
 
     return employee
 

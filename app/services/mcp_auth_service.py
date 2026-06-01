@@ -152,7 +152,6 @@ class MCPAuthService:
                 selectinload(Employee.employee_departments).selectinload(
                     EmployeeDepartment.department
                 ),
-                selectinload(Employee.custom_role),
             )
         )
         result = await self.db.execute(stmt)
