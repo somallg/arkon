@@ -56,13 +56,13 @@ const SCOPE_COLORS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  seed: "#c2652a",
-  developing: "#d38b80",
-  mature: "#bfa88f",
-  evergreen: "#7c9070",
+  seed: "#a8977e",
+  developing: "#d4872e",
+  mature: "#2e8b8b",
+  evergreen: "#3a8a3f",
 };
 
-function getNodeColor(n: Node, mode: "scope" | "status" | "type"): string {
+function getNodeColor(n: Node, mode: "scope" | "status"): string {
   if (mode === "status") {
     return STATUS_COLORS[n.status || "seed"] || STATUS_COLORS.seed;
   }
@@ -199,7 +199,7 @@ export function WikiGraph({
     scopeType?: string;
     scopeName?: string | null;
   } | null>(null);
-  const [colorMode, setColorMode] = React.useState<"scope" | "status" | "type">("scope");
+  const [colorMode, setColorMode] = React.useState<"scope" | "status">("scope");
 
   // Measure container.
   React.useEffect(() => {
@@ -536,12 +536,7 @@ export function WikiGraph({
     }
   }, []);
 
-  // --- Legend data ---
-  const typeCounts = React.useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const n of rawNodes) counts[n.page_type] = (counts[n.page_type] ?? 0) + 1;
-    return counts;
-  }, [rawNodes]);
+
 
   const scopeCounts = React.useMemo(() => {
     const counts: Record<string, { count: number; scopeType: string }> = {};
@@ -649,15 +644,6 @@ export function WikiGraph({
             )}
           >
             Maturity
-          </button>
-          <button
-            onClick={() => setColorMode("type")}
-            className={cn(
-              "px-2 py-1 text-[10px] font-semibold rounded-lg transition-all",
-              colorMode === "type" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-accent"
-            )}
-          >
-            Type
           </button>
         </div>
       )}
@@ -794,40 +780,6 @@ export function WikiGraph({
             </>
           )}
 
-          {colorMode === "type" && (
-            <>
-              <div className="mb-1.5 font-semibold text-foreground text-xs">Node Types</div>
-              <div className="flex flex-col gap-1">
-                {Object.entries(typeCounts)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([type, count]) => (
-                    <div
-                      key={type}
-                      className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-accent/30 transition-colors"
-                    >
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{
-                          background: wikiTypeColor(type),
-                          boxShadow: `0 0 4px ${wikiTypeColor(type)}40`,
-                        }}
-                      />
-                      <span
-                        className="material-symbols-outlined"
-                        style={{ fontSize: 11, color: wikiTypeColor(type) }}
-                      >
-                        {wikiTypeIcon(type)}
-                      </span>
-                      <span className="text-muted-foreground">{wikiTypeGroupLabel(type)}</span>
-                      <span className="text-muted-foreground/60 ml-auto tabular-nums">{count}</span>
-                    </div>
-                  ))}
-              </div>
-              {scopeCounts.length > 0 && (
-                <ScopeLegendSection scopeCounts={scopeCounts} />
-              )}
-            </>
-          )}
         </div>
       )}
 

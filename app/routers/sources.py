@@ -52,6 +52,7 @@ class SourceResponse(BaseModel):
     source_type: Optional[str]
     file_name: Optional[str]
     url: Optional[str]
+    file_size: Optional[int] = None
     status: str
     error_message: Optional[str] = None
     progress: int = 0
@@ -128,6 +129,7 @@ def _to_response(source: Source, wiki_page_count: int = 0, image_count: int = 0)
         source_type=source.source_type,
         file_name=source.file_name,
         url=source.url,
+        file_size=source.file_size,
         status=source.status,
         error_message=source.error_message,
         progress=source.progress,

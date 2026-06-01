@@ -276,10 +276,10 @@ export function WikiPageTree({
         : "";
 
     const statusColors: Record<string, string> = {
-      seed: "bg-[#c2652a]/40 border-[#c2652a]/60",
-      developing: "bg-[#d38b80]/40 border-[#d38b80]/60",
-      mature: "bg-[#e5d4c0]/80 border-[#bfa88f]",
-      evergreen: "bg-[#7c9070]/40 border-[#5f7453]/60",
+      seed: "bg-[#a8977e]/20 border-[#a8977e]/50",
+      developing: "bg-[#d4872e]/20 border-[#d4872e]/50",
+      mature: "bg-[#2e8b8b]/20 border-[#2e8b8b]/50",
+      evergreen: "bg-[#3a8a3f]/20 border-[#3a8a3f]/50",
     };
     const statusText: Record<string, string> = {
       seed: "Seed",
@@ -307,11 +307,7 @@ export function WikiPageTree({
             title={page.summary || page.title}
           >
             <span
-              className={cn("w-1.5 h-1.5 rounded-full shrink-0 border border-current", statusColors[page.status || "seed"])}
-              style={{
-                backgroundColor: page.status === "mature" ? "#e5d4c0" : undefined,
-                borderColor: page.status === "mature" ? "#bfa88f" : undefined
-              }}
+              className={cn("w-1.5 h-1.5 rounded-full shrink-0 border", statusColors[page.status || "seed"])}
               title={`Status: ${statusText[page.status || "seed"]}`}
             />
             <span className="truncate">{page.title}</span>
@@ -326,11 +322,7 @@ export function WikiPageTree({
             title={page.summary || page.title}
           >
             <span
-              className={cn("w-1.5 h-1.5 rounded-full shrink-0 border border-current", statusColors[page.status || "seed"])}
-              style={{
-                backgroundColor: page.status === "mature" ? "#e5d4c0" : undefined,
-                borderColor: page.status === "mature" ? "#bfa88f" : undefined
-              }}
+              className={cn("w-1.5 h-1.5 rounded-full shrink-0 border", statusColors[page.status || "seed"])}
               title={`Status: ${statusText[page.status || "seed"]}`}
             />
             <span className="truncate">{page.title}</span>
