@@ -400,7 +400,7 @@ def register_tools(mcp: FastMCP):
                   Use `search_wiki` or `list_wiki_pages` to find slugs.
 
         Returns:
-            Markdown content of the page, plus a "Liên kết tới" section listing
+            Markdown content of the page, plus an "Outlinks" section listing
             pages this one links out to, and a "Backlinks" section listing pages
             that link back to it. Both lists (and any inline `[[slug]]` wikilinks)
             can be followed with another `read_wiki_page` call to traverse the
@@ -476,7 +476,7 @@ def register_tools(mcp: FastMCP):
         body = page.content_md or ""
         outlinks = sorted({s for s in outlinks if s != slug})
         if outlinks:
-            body = body.rstrip() + "\n\n## Liên kết tới\n" + "\n".join(
+            body = body.rstrip() + "\n\n## Outlinks\n" + "\n".join(
                 f"- `{s}`" for s in outlinks
             )
         if backlinks:

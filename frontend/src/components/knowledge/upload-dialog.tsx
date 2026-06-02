@@ -295,12 +295,12 @@ export function UploadDialog({ open, onOpenChange, types, departments, onUploade
                 className="rounded border-border mt-0.5"
               />
               <span className="text-sm font-medium text-foreground">
-                Giữ nguyên văn — không tạo wiki
+                Keep verbatim — skip wiki generation
               </span>
             </label>
             <p className="text-xs text-muted-foreground ml-6">
-              Dùng cho văn bản pháp quy (Công báo, Nghị định...). Tài liệu được lưu
-              và tra cứu đúng nguyên văn, không để AI tóm tắt hay viết lại.
+              Use for official or high-fidelity documents (contracts, decrees, regulations).
+              The document is stored and searched exactly as-is, skipping AI summarization or rewriting.
             </p>
           </div>
 

@@ -702,9 +702,9 @@ export default function WikiPageViewer() {
                           {sourceData.preserve_verbatim && (
                             <span
                               className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-secondary text-secondary-foreground shrink-0"
-                              title="Giữ nguyên văn — tra cứu đúng bản gốc, không qua wiki"
+                              title="Verbatim — searches the exact original document, skipping the wiki pipeline"
                             >
-                              Nguyên văn
+                              Verbatim
                             </span>
                           )}
                         </h3>

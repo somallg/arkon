@@ -203,9 +203,9 @@ export function KnowledgeTable({
                         <Badge
                           variant="secondary"
                           className="text-[10px] font-medium h-5 px-2"
-                          title="Giữ nguyên văn — không tạo wiki"
+                          title="Keep verbatim — skip wiki generation"
                         >
-                          Nguyên văn
+                          Verbatim
                         </Badge>
                       )}
                     </div>
