@@ -60,7 +60,7 @@ DEFAULT_ADMIN_PASSWORD=your-secure-password
 POSTGRES_USER=arkon
 POSTGRES_PASSWORD=your-postgres-password
 POSTGRES_DB=arkon
-DATABASE_URL=postgresql+asyncpg://arkon:your-postgres-password@postgres:5432/arkon
+DATABASE_URL=postgresql+asyncpg://arkon:your-postgres-password@arkon-postgres:5432/arkon
 
 # Required: MinIO credentials — MINIO_ACCESS_KEY / MINIO_SECRET_KEY initialise the MinIO
 # container on first run; changing them after first start requires resetting the volume
@@ -85,15 +85,15 @@ docker compose --env-file .env.docker up -d --build
 This starts all containers:
 | Container | Purpose |
 |---|---|
-| `arkon_postgres` | PostgreSQL 16 with pgvector (port 5432) |
-| `arkon_redis` | Redis 7 job queue (port 6379) |
-| `arkon_minio` | MinIO file storage (port 9000, console 9001) |
-| `arkon_api` | FastAPI backend + MCP server (port 5055) |
-| `arkon_worker` | Background worker — document ingestion + wiki compilation |
-| `arkon_worker_skills` | Background worker — AI skill processing |
-| `arkon_frontend` | Next.js admin portal (port 3119) |
+| `arkon-postgres` | PostgreSQL 16 with pgvector (port 5432) |
+| `arkon-redis` | Redis 7 job queue (port 6379) |
+| `arkon-minio` | MinIO file storage (port 9000, console 9001) |
+| `arkon-api` | FastAPI backend + MCP server (port 5055) |
+| `arkon-worker` | Background worker — document ingestion + wiki compilation |
+| `arkon-worker-skills` | Background worker — AI skill processing |
+| `arkon-frontend` | Next.js admin portal (port 3119) |
 
-Workers start only after `arkon_api` passes its health check, so there is no race condition on startup.
+Workers start only after `arkon-api` passes its health check, so there is no race condition on startup.
 
 > **Important:** always pass `--env-file .env.docker` explicitly — both for `build` and `up`. Without it, Docker Compose falls back to `.env` (your local dev config). This causes two classes of errors:
 > - MinIO `SignatureDoesNotMatch` — credentials mismatch
@@ -121,7 +121,7 @@ Recommended LLMs for wiki compilation (large context window):
 ### 5. Run database migrations
 
 ```bash
-docker exec arkon_api alembic upgrade head
+docker exec arkon-api alembic upgrade head
 ```
 
 > On first startup, the API runs migrations automatically before serving requests. You only need to run this manually after upgrading Arkon.
@@ -177,7 +177,7 @@ Edit `.env.docker` — the key differences from local Docker setup:
 SECRET_KEY=<python3 -c "import secrets; print(secrets.token_urlsafe(32))">
 POSTGRES_PASSWORD=<strong-random-password>
 POSTGRES_DB=arkon
-DATABASE_URL=postgresql+asyncpg://arkon:<strong-random-password>@postgres:5432/arkon
+DATABASE_URL=postgresql+asyncpg://arkon:<strong-random-password>@arkon-postgres:5432/arkon
 MINIO_SECRET_KEY=<strong-random-password>
 
 # Admin account
@@ -206,7 +206,7 @@ Check all containers are healthy:
 docker compose ps
 ```
 
-All services should show `healthy` or `running`. The `worker` and `worker_skills` containers start only after `arkon_api` passes its health check (~30 seconds).
+All services should show `healthy` or `running`. The `arkon-worker` and `arkon-worker-skills` containers start only after `arkon-api` passes its health check (~30 seconds).
 
 ### 5. Verify
 
@@ -498,19 +498,19 @@ See [MCP & Claude](MCP.md) for the full connection guide, tool reference, and ti
 | `SECRET_KEY` | — | JWT signing secret. Must be changed in production. |
 | `DEFAULT_ADMIN_EMAIL` | `admin@arkon.local` | Admin account email (created on first startup) |
 | `DEFAULT_ADMIN_PASSWORD` | `admin123` | Admin account password |
-| `MINIO_ENDPOINT` | `minio:9000` | MinIO server address used internally by the API (Docker service name; local: `localhost:9000`) |
+| `MINIO_ENDPOINT` | `arkon-minio:9000` | MinIO server address used internally by the API (Docker service name; local: `localhost:9000`) |
 | `MINIO_PUBLIC_ENDPOINT` | _(same as `MINIO_ENDPOINT`)_ | Public MinIO address embedded in presigned URLs. Must be browser-accessible: `localhost:9000` on local Docker, `<server-ip>:9000` on a remote server |
 | `MINIO_ACCESS_KEY` | `minioadmin` | MinIO root user — initialises the container on first run |
 | `MINIO_SECRET_KEY` | — | MinIO root password — initialises the container on first run; changing it after first start requires `docker compose down -v` |
 | `MINIO_BUCKET` | `arkon-files` | Bucket name for uploaded files |
 | `MINIO_SECURE` | `false` | Use HTTPS for MinIO (`true` in production) |
-| `REDIS_HOST` | `redis` | Redis host (Docker: service name; local: `localhost`) |
+| `REDIS_HOST` | `arkon-redis` | Redis host (Docker: service name; local: `localhost`) |
 | `REDIS_PORT` | `6379` | Redis port |
 | `REDIS_PASSWORD` | _(empty)_ | Redis password |
 | `WORKER_MAX_JOBS` | `3` | Max concurrent background jobs |
 | `CORS_ORIGINS` | `*` | Allowed CORS origins (comma-separated) |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:5055` | Public API URL (used by the browser) |
-| `INTERNAL_API_URL` | `http://api:5055` | Internal API URL used by the Next.js server for proxying (Docker only) |
+| `INTERNAL_API_URL` | `http://arkon-api:5055` | Internal API URL used by the Next.js server for proxying (Docker only) |
 
 AI provider settings (embedding, LLM, vision, API keys) are configured through the Admin Portal → Settings, not in env files.
 
@@ -532,6 +532,6 @@ AI provider settings (embedding, LLM, vision, API keys) are configured through t
 | OAuth login form shows `http://` URLs | Nginx not forwarding `X-Forwarded-Proto` — add `proxy_set_header X-Forwarded-Proto $scheme;` to both `/mcp` and `/` location blocks |
 | Claude Desktop connected but tools not used | Add instructions to Claude's Custom Instructions or a Project — see [MCP & Claude](MCP.md) |
 | MinIO `SignatureDoesNotMatch` | Credentials mismatch — likely caused by running `docker compose up` without `--env-file .env.docker`, which makes Docker Compose use your local `.env` to initialise MinIO. Fix: `docker compose down -v` then `docker compose --env-file .env.docker up -d --build` |
-| MinIO `Invalid Request (invalid hostname)` | `MINIO_ENDPOINT` contains an underscore (e.g. `arkon_minio`). Use the Docker Compose service name instead: `minio:9000` |
+| MinIO `Invalid Request (invalid hostname)` | `MINIO_ENDPOINT` contains an underscore (e.g. `arkon_minio`). Use the Docker Compose service name instead: `arkon-minio:9000` |
 | Images/files not loading in browser (`ERR_NAME_NOT_RESOLVED`) | Presigned URLs are pointing to an internal hostname. Set `MINIO_PUBLIC_ENDPOINT` to a browser-accessible address: `localhost:9000` for local Docker, `<server-ip>:9000` for a remote server |
 | Frontend still calls `localhost:5055` after changing `NEXT_PUBLIC_API_URL` | `NEXT_PUBLIC_*` variables in Next.js are baked into the bundle at **build time**, not runtime. Changing `.env.docker` and restarting the container has no effect. You must rebuild the image: `docker compose --env-file .env.docker build --no-cache frontend && docker compose --env-file .env.docker up -d` |

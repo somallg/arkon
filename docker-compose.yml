@@ -5,6 +5,7 @@ x-backend: &backend
     context: .
     dockerfile: Dockerfile
   image: arkon-backend:latest
+  env_file: [.env]
   restart: always
   depends_on:
     arkon-postgres:
