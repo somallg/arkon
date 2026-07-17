@@ -7,20 +7,20 @@ x-backend: &backend
   image: arkon-backend:latest
   restart: always
   depends_on:
-    postgres:
+    arkon-postgres:
       condition: service_healthy
-    redis:
+    arkon-redis:
       condition: service_healthy
-    minio:
+    arkon-minio:
       condition: service_healthy
   volumes:
     - ./temp_uploads:/app/temp_uploads
 
 services:
   # ── Infrastructure ────────────────────────────────────────────
-  postgres:
+  arkon-postgres:
     image: pgvector/pgvector:pg16
-    container_name: arkon_postgres
+    container_name: arkon-postgres
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-arkon}
@@ -36,9 +36,9 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
+  arkon-redis:
     image: redis:7-alpine
-    container_name: arkon_redis
+    container_name: arkon-redis
     restart: always
     command: redis-server --save 60 1 --loglevel warning --requirepass ${REDIS_PASSWORD:-arkon_secret}
     volumes:
@@ -51,9 +51,9 @@ services:
       timeout: 3s
       retries: 10
 
-  minio:
+  arkon-minio:
     image: minio/minio:latest
-    container_name: arkon_minio
+    container_name: arkon-minio
     restart: always
     command: server /data --console-address ":9001"
     environment:
@@ -71,23 +71,23 @@ services:
       retries: 10
 
   # ── Application ───────────────────────────────────────────────
-  migrator:
+  arkon-migrator:
     <<: *backend
-    container_name: arkon_migrator
+    container_name: arkon-migrator
     command: alembic upgrade head
     restart: "no"
 
-  api:
+  arkon-api:
     <<: *backend
-    container_name: arkon_api
+    container_name: arkon-api
     depends_on:
-      migrator:
+      arkon-migrator:
         condition: service_completed_successfully
-      postgres:
+      arkon-postgres:
         condition: service_healthy
-      redis:
+      arkon-redis:
         condition: service_healthy
-      minio:
+      arkon-minio:
         condition: service_healthy
     ports:
       - "5055:5055"
@@ -100,38 +100,38 @@ services:
       retries: 5
       start_period: 30s
 
-  worker:
+  arkon-worker:
     <<: *backend
-    container_name: arkon_worker
+    container_name: arkon-worker
     command: python -m arq app.worker.WorkerSettings
     depends_on:
-      api:
+      arkon-api:
         condition: service_healthy
 
-  worker_skills:
+  arkon-worker-skills:
     <<: *backend
-    container_name: arkon_worker_skills
+    container_name: arkon-worker-skills
     command: python -m arq app.worker.SkillWorkerSettings
     depends_on:
-      api:
+      arkon-api:
         condition: service_healthy
 
-  frontend:
+  arkon-frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5055}
     image: arkon-frontend:latest
-    container_name: arkon_frontend
+    container_name: arkon-frontend
     restart: always
     ports:
       - "3119:3000"
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:5055}
-      - INTERNAL_API_URL=http://api:5055
+      - INTERNAL_API_URL=http://arkon-api:5055
     depends_on:
-      api:
+      arkon-api:
         condition: service_healthy
 
 volumes:
